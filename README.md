@@ -1,5 +1,5 @@
 # HeCBench
-This repository contains a collection of heterogeneous computing benchmarks written with CUDA, HIP, SYCL/DPC++, and OpenMP-4.5 target offloading for studying performance, portability, and productivity. 
+This repository contains a collection of heterogeneous computing benchmarks written with CUDA, HIP, SYCL/DPC++, OpenMP-4.5, and Kokkos target offloading for studying performance, portability, and productivity. 
 
 ## Background, use cases and future work
 Z. Jin and J. S. Vetter, "A Benchmark Suite for Improving Performance Portability of the SYCL Programming Model," 2023 IEEE International Symposium on Performance Analysis of Systems and Software (ISPASS), Raleigh, NC, USA, 2023, pp. 325-327, doi: 10.1109/ISPASS57527.2023.00041. (https://ieeexplore.ieee.org/document/10158214)
