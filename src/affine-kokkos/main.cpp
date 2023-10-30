@@ -36,11 +36,26 @@
 #include <cmath>
 #include <chrono>
 #include <iostream>
-#include <sycl/sycl.hpp>
+#include <Kokkos_Core.hpp>
 #include "reference.h"
+
+#if defined(INTEL_GPU)
+typedef Kokkos::Experimental::SYCL ExecSpace;
+typedef Kokkos::Experimental::SYCLDeviceUSMSpace MemSpace; //also available SYCLSharedUSMSpace
+#elif defined(NVIDIA_GPU)
+typedef Kokkos::Cuda ExecSpace;
+typedef Kokkos::CudaSpace MemSpace;
+#else //CPU
+typedef Kokkos::OpenMP ExecSpace;
+typedef Kokkos::HostSpace MemSpace;
+#endif
+
+typedef Kokkos::LayoutRight Layout;
 
 int main(int argc, char** argv)
 {
+  Kokkos::initialize(argc, argv);
+  {
   if (argc != 4)
   {
     printf("Usage: %s <input image> <output image> <iterations>\n", argv[0]) ;
@@ -70,34 +85,19 @@ int main(int argc, char** argv)
   fclose(input_file);
 
   const int iterations = atoi(argv[3]);
-
-#ifdef USE_GPU
-  sycl::queue q(sycl::gpu_selector_v, sycl::property::queue::in_order());
-#else
-  sycl::queue q(sycl::cpu_selector_v, sycl::property::queue::in_order());
-#endif
-  printf("Running on: %s\n", q.get_device().get_info<sycl::info::device::name>().c_str());
-
-  size_t image_size_bytes = sizeof(unsigned short) * X_SIZE * Y_SIZE;
   
-  unsigned short *d_input_image = sycl::malloc_device<unsigned short>(X_SIZE * Y_SIZE, q);
-  q.memcpy(d_input_image, input_image, image_size_bytes); 
+  Kokkos::View<const unsigned short*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vinput_image(input_image, X_SIZE*Y_SIZE);
+  Kokkos::View<unsigned short*, Layout, MemSpace> d_input_image = Kokkos::View<unsigned short*, Layout, MemSpace>("d_input_image", X_SIZE*Y_SIZE);
+  Kokkos::deep_copy(d_input_image, vinput_image);
 
-  unsigned short *d_output_image = sycl::malloc_device<unsigned short>(X_SIZE*Y_SIZE, q);
+  Kokkos::View<unsigned short*, Layout, MemSpace> d_output_image = Kokkos::View<unsigned short*, Layout, MemSpace>("d_output_image", X_SIZE*Y_SIZE);
 
-  sycl::range<2> globalSize(Y_SIZE,X_SIZE);
-  sycl::range<2> localSize(16,16);
-
-  q.wait();
   auto start = std::chrono::steady_clock::now();
 
   for (int i = 0; i < iterations; i++) {
-    q.submit([&](sycl::handler &h) {
-      h.parallel_for<class affine_transform> (
-        sycl::nd_range<2>(globalSize, localSize), [=](sycl::nd_item<2> item) {
-        int y = item.get_global_id(0); 
-        int x = item.get_global_id(1); 
-
+    Kokkos::parallel_for("affine_transform", 
+    Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>> ({0,0}, {Y_SIZE, X_SIZE}, {16,16}), 
+    KOKKOS_LAMBDA(const int y, const int x){
         const float lx_rot   = 30.0f;
         const float ly_rot   = 0.0f; 
         const float lx_expan = 0.5f;
@@ -116,10 +116,10 @@ int main(int argc, char** argv)
         unsigned short output_buffer;
 
         // forward affine transformation 
-        affine[0][0] = lx_expan * sycl::cos(lx_rot*PI/180.0f);
-        affine[0][1] = ly_expan * sycl::sin(ly_rot*PI/180.0f);
-        affine[1][0] = lx_expan * sycl::sin(lx_rot*PI/180.0f);
-        affine[1][1] = ly_expan * sycl::cos(ly_rot*PI/180.0f);
+        affine[0][0] = lx_expan * Kokkos::cos(lx_rot*PI/180.0f);
+        affine[0][1] = ly_expan * Kokkos::sin(ly_rot*PI/180.0f);
+        affine[1][0] = lx_expan * Kokkos::sin(lx_rot*PI/180.0f);
+        affine[1][1] = ly_expan * Kokkos::cos(ly_rot*PI/180.0f);
         beta[0]      = lx_move;
         beta[1]      = ly_move;
 
@@ -149,8 +149,8 @@ int main(int argc, char** argv)
         x_new  = i_beta[0] + i_affine[0][0]*(x-X_SIZE/2.0f) + i_affine[0][1]*(y-Y_SIZE/2.0f) + X_SIZE/2.0f;
         y_new  = i_beta[1] + i_affine[1][0]*(x-X_SIZE/2.0f) + i_affine[1][1]*(y-Y_SIZE/2.0f) + Y_SIZE/2.0f;
 
-        m      = (int)sycl::floor(x_new);
-        n      = (int)sycl::floor(y_new);
+        m      = (int)Kokkos::floor(x_new);
+        n      = (int)Kokkos::floor(y_new);
 
         x_frac = x_new - m;
         y_frac = y_new - n;
@@ -174,19 +174,17 @@ int main(int argc, char** argv)
         }
 
         d_output_image[(y * X_SIZE)+x] = output_buffer;
-      });
     });
   }
-
-  q.wait();
   auto end = std::chrono::steady_clock::now();
   auto time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
   std::cout << "   Average kernel execution time " << (time * 1e-9f) / iterations << " (s)\n";
 
-  q.memcpy(output_image, d_output_image, image_size_bytes).wait();
-
-  sycl::free(d_input_image, q);
-  sycl::free(d_output_image, q);
+  {
+    //Kokkos::View<const unsigned short*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vinput_image(input_image, X_SIZE*Y_SIZE);
+    Kokkos::View<unsigned short*, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> outs(output_image, X_SIZE*Y_SIZE);
+    Kokkos::deep_copy(outs, d_output_image);
+  }
 
   // verify
   affine_reference(input_image, output_image_ref);
@@ -209,6 +207,7 @@ int main(int argc, char** argv)
   size_t items_written = fwrite(output_image, sizeof(output_image), 1, output_file);
   printf("   Bytes written = %d\n\n", (int)(items_written * sizeof(output_image)));
   fclose(output_file);
-
-  return 0 ;
+  }
+  Kokkos::finalize();
+  return 0;
 }
