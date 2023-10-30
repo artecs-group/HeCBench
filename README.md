@@ -8,9 +8,21 @@ Z. Jin and J. S. Vetter, "A Benchmark Suite for Improving Performance Portabilit
 [AMD ROCm](https://rocmdocs.amd.com/en/latest/Installation_Guide/Installation-Guide.html)  
 [Intel DPC++ compiler](https://github.com/intel/llvm/blob/sycl/sycl/doc/GetStartedGuide.md) or [Intel oneAPI toolkit](https://software.intel.com/content/www/us/en/develop/articles/installation-guide-for-intel-oneapi-toolkits.html)  
 [NVIDIA HPC SDK](https://developer.nvidia.com/hpc-sdk)
+[Kokkos Core](https://kokkos.github.io/kokkos-core-wiki/building.html)
 
 # Dependencies
   Certain SYCL benchmarks require [oneDPL](https://github.com/oneapi-src/oneDPL), [oneTBB](https://github.com/oneapi-src/oneTBB), [Syclomatic](https://github.com/oneapi-src/SYCLomatic), or [oneMKL interfaces](https://github.com/oneapi-src/oneMKL).
+
+# Build for Kokkos
+Kokkos build was implemented with cmake. To build you have to include kokkos paths. It also includes a run command.
+
+```bash
+mkdir build
+cd build
+cmake .. -DDEVICE=ngpu -DKOKKOS_INSTALL_DIR=/opt/kokkos4.1/kokkos/cuda_install/ -DKokkos_DIR=/opt/kokkos4.1/kokkos/cuda_install/lib/cmake/Kokkos/
+make
+make run
+```
 
 # Benchmark categories
 Each benchmark falls into a single category. While such classification is not accurate, the arrangement serves as a starting point for users of the benchmark suite. Please see the Reference for more information about each benchmark. 
