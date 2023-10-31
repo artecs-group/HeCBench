@@ -376,6 +376,7 @@ int main(int argc, char **argv)
 #else
   sycl::queue q(sycl::cpu_selector_v, sycl::property::queue::in_order());
 #endif
+  printf("Running on: %s\n", q.get_device().get_info<sycl::info::device::name>().c_str());
 
   clock_t start;
   start = clock();
