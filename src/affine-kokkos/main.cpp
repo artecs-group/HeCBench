@@ -181,7 +181,6 @@ int main(int argc, char** argv)
   std::cout << "   Average kernel execution time " << (time * 1e-9f) / iterations << " (s)\n";
 
   {
-    //Kokkos::View<const unsigned short*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vinput_image(input_image, X_SIZE*Y_SIZE);
     Kokkos::View<unsigned short*, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> outs(output_image, X_SIZE*Y_SIZE);
     Kokkos::deep_copy(outs, d_output_image);
   }
