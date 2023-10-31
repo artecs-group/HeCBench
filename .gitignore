@@ -12,3 +12,4 @@
 *.yaml
 dpct_output
 */main
+build/
