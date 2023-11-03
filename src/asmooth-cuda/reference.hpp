@@ -1,3 +1,4 @@
+#include <stdio.h>
 void reference (int Lx, int Ly, int threshold, int maxRad, 
                 float *img, int *box, float *norm, float *out)
 {
