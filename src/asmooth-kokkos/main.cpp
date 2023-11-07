@@ -63,9 +63,8 @@ int main(int argc, char* argv[]) {
   Kokkos::View<int*, Layout, MemSpace> d_box = Kokkos::View<int*, Layout, MemSpace>("d_box", size);
   Kokkos::View<float*, Layout, MemSpace> d_out = Kokkos::View<float*, Layout, MemSpace>("d_out", size);
 
-  const size_t lws = 16;
-  const size_t gws1 = (Ly+(lws-1))/lws*lws;
-  const size_t gws2 = (Lx+(lws-1))/lws*lws;
+  const size_t lws = 32;
+  const size_t lw = 16;
   const size_t gw = (Lx*Ly+(lws-1))/lws;
 
   Kokkos::View<const float*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vimg(img, size);
@@ -85,18 +84,17 @@ int main(int argc, char* argv[]) {
 
     // launch three kernels
     Kokkos::parallel_for("smoothing", 
-    Kokkos::TeamPolicy<ExecSpace>(gw, lws*lws)
+    Kokkos::TeamPolicy<ExecSpace>(gw, lws)
     .set_scratch_size(0, Kokkos::PerTeam(shared_size)), 
     KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
       int blockDim_x = lws;
       int blockDim_y = lws;
-      int tid = memT.team_rank() % lws;
-      int tjd = memT.team_rank() / lws;
-      int gid = memT.league_rank() * memT.team_size() + memT.team_rank();
-      int i = gid % Lx;
-      int j = gid / Lx;
-      int stid = tjd * blockDim_x + tid;
-      int gtid = j * Lx + i;
+      int stid = memT.team_rank();
+      int tid = stid % lws;
+      int tjd = stid / lws;
+      int gtid = memT.league_rank() * memT.team_size() + memT.team_rank();
+      int i = gtid % Lx;
+      int j = gtid / Lx;
       shared_float s_Img(memT.team_scratch(0), 1024);
 
       //part of shared memory may be unused
@@ -146,28 +144,29 @@ int main(int argc, char* argv[]) {
     });
 
     Kokkos::parallel_for("normalize", 
-    Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>> ({0,0}, {gws1, gws2}, {lws,lws}), 
+    Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>> ({0,0}, {(Ly+(lw-1))/lw*lw, (Lx+(lw-1))/lw*lw}, {lw,lw}), 
     KOKKOS_LAMBDA(const int j, const int i){
       if ( i < Lx && j < Ly ) {
-        int gtid = j * Lx + i;  
+        int gtid = j * Lx + i;
         const float norm = d_norm[gtid];
         if (norm != 0) d_img[gtid] = d_img[gtid]/norm;
       }
     });
 
+    Kokkos::fence();
+
     Kokkos::parallel_for("output", 
-    Kokkos::TeamPolicy<ExecSpace>(gw, lws*lws)
+    Kokkos::TeamPolicy<ExecSpace>(gw, lws)
     .set_scratch_size(0, Kokkos::PerTeam(shared_size)), 
     KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
       int blockDim_x = lws;
       int blockDim_y = lws;
-      int tid = memT.team_rank() % lws;
-      int tjd = memT.team_rank() / lws;
-      int gid = memT.league_rank() * memT.team_size() + memT.team_rank();
-      int i = gid % Lx;
-      int j = gid / Lx;
-      int stid = tjd * blockDim_x + tid;
-      int gtid = j * Lx + i;
+      int stid = memT.team_rank();
+      int tid = stid % lws;
+      int tjd = stid / lws;
+      int gtid = memT.league_rank() * memT.team_size() + memT.team_rank();
+      int i = gtid % Lx;
+      int j = gtid / Lx;
       shared_float s_Img(memT.team_scratch(0), 1024);
 
       //part of shared memory may be unused
@@ -192,7 +191,7 @@ int main(int argc, char* argv[]) {
               else
                 sum += d_img[gtid + ii*Ly + jj];
             }
-        if ( ksum != 0 ) d_out[gtid] = sum/ksum;
+        if ( ksum != 0 ) d_out[gtid] = sum / (float)ksum;
       }
     });
 
