@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20.5)
 
-set(This face)
+set(This hogbom)
 
 project(${This} LANGUAGES CXX)
 
@@ -55,29 +55,29 @@ endif()
 set(Kokkos_ROOT ${KOKKOS_INSTALL_DIR}/lib/cmake/Kokkos)
 
 set(Sources
+    kernels.cpp
     main.cpp
-    haar.cpp
-    image.cpp
-    rectangles.cpp
-    stdio-wrapper.cpp
+    ../hogbom-cuda/reference.cpp
+    ../hogbom-cuda/timer.cpp
 )
 
 set(Headers
-    haar.hpp
-    image.hpp
-    stdio-wrapper.hpp
+    ../hogbom-cuda/reference.h
+    ../hogbom-cuda/timer.h
+    ../hogbom-cuda/utils.h
+    ../hogbom-cuda/kernels.h
 )
 
 set(CFLAGS "-O3")
-add_executable(${This} ${Sources})
-target_include_directories(${This} PRIVATE ${oneDPL_INCLUDE_DIRS})
+add_executable(${This} ${Sources} ${Headers})
+target_include_directories(${This} PRIVATE ${oneDPL_INCLUDE_DIRS} "../hogbom-cuda")
 add_definitions(-D"${DEV_TYPE}")
 target_compile_options(${This} PRIVATE ${CFLAGS})
 target_link_libraries(${This} Kokkos::kokkos ${oneDPL_LIBRARIES})
 
 
 add_custom_target(run
-    COMMAND ./${This} ${PROJECT_SOURCE_DIR}/../face-cuda/dataset/Face.pgm ${PROJECT_SOURCE_DIR}/../face-cuda/dataset/info.txt ${PROJECT_SOURCE_DIR}/../face-cuda/dataset/class.txt Output.pgm
+    COMMAND ./${This} ${PROJECT_SOURCE_DIR}/../hogbom-cuda/data/dirty_4096.img ${PROJECT_SOURCE_DIR}/../hogbom-cuda/data/psf_4096.img 1
     DEPENDS ${PROJECT_BINARY_DIR}/${This}
     WORKING_DIRECTORY .
 )
