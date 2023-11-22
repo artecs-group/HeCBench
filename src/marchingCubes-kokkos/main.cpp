@@ -206,9 +206,9 @@ Kokkos::View<float*, Layout, MemSpace>* minMax)
   Kokkos::parallel_for("min_max2", 
   Kokkos::TeamPolicy<ExecSpace>(gSize, lSize), 
   KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
-    unsigned int tid(item.get_local_id(1));
-    unsigned int voxelOffset(item.get_local_id(0));
-    unsigned int blockIdx_x = item.get_group(1);
+    unsigned int tid(memT.team_rank() % (voxelXLv2 * voxelYLv2));
+    unsigned int voxelOffset((memT.team_rank() % lSize) / voxelXLv2 * voxelYLv2);
+    unsigned int blockIdx_x = memT.league_rank() / countedBlockNumLv1;
     unsigned int blockIndex(blockIndicesLv1[blockIdx_x]);
     unsigned int tp(blockIndex);
     unsigned int x((blockIndex % gridXLv1) * (voxelXLv1 - 1) + (voxelOffset % 5) * (voxelXLv2 - 1) + (tid & 3));
@@ -232,8 +232,8 @@ Kokkos::View<float*, Layout, MemSpace>* minMax)
       for (int c1(8); c1 > 0; c1 /= 2)
       {
         float t0, t1;
-        t0 = sg.shuffle_down(minV, c1);
-        t1 = sg.shuffle_down(maxV, c1);
+        t0 = Kokkos::shfl_down(memT, minV, c1);
+        t1 = Kokkos::shfl_down(memT, maxV, c1);
         if (t0 < minV)minV = t0;
         if (t1 > maxV)maxV = t1;
       }
@@ -252,75 +252,83 @@ Kokkos::View<float*, Layout, MemSpace>* minMax)
 
 void compactLv2(
   float isoValue,
-  const float*__restrict minMax,
-  const unsigned int*__restrict blockIndicesLv1,
-  unsigned int*__restrict blockIndicesLv2,
+  const Kokkos::View<float*, Layout, MemSpace>* minMax,
+  const Kokkos::View<unsigned int*, Layout, MemSpace>* blockIndicesLv1,
+  Kokkos::View<unsigned int*, Layout, MemSpace>* blockIndicesLv2,
   unsigned int counterBlockNumLv1,
-  unsigned int*__restrict countedBlockNumLv2,
-  unsigned int*__restrict sums)
+  Kokkos::View<unsigned int*, Layout, MemSpace>* countedBlockNumLv2)
 {
-  auto sg = item.get_sub_group();
-  constexpr unsigned int warpNum(countingThreadNumLv2 / 32);
-  unsigned int tid(item.get_local_id(0));
-  unsigned int laneid = tid % 32;
-  unsigned int warpid(tid >> 5);
-  unsigned int id0(tid + item.get_group(0) * countingThreadNumLv2);
-  unsigned int id1(id0 / voxelNumLv2);
-  unsigned int test;
-  if (id1 < counterBlockNumLv1)
-  {
-    if (minMax[2 * id0] <= isoValue && minMax[2 * id0 + 1] >= isoValue)
-      test = 1;
-    else
-      test = 0;
-  }
-  else test = 0;
-  unsigned int testSum(test);
-#pragma unroll
-  for (int c0(1); c0 < 32; c0 *= 2)
-  {
-    unsigned int tp(sg.shuffle_up(testSum, c0));
-    if (laneid >= c0) testSum += tp;
-  }
-  if (laneid == 31) sums[warpid] = testSum;
-  item.barrier(sycl::access::fence_space::local_space);
-  if (warpid == 0)
-  {
-    unsigned int warpSum = sums[laneid];
-#pragma unroll
-    for (int c0(1); c0 < warpNum; c0 *= 2)
-    {
-      unsigned int tp(sg.shuffle_up(warpSum, c0));
-      if (laneid >= c0)warpSum += tp;
-    }
-    sums[laneid] = warpSum;
-  }
-  item.barrier(sycl::access::fence_space::local_space);
-  if (warpid != 0) testSum += sums[warpid - 1];
-  if (tid == countingThreadNumLv2 - 1) {
-    sums[31] = atomicAdd(countedBlockNumLv2, testSum);
-  }
-  item.barrier(sycl::access::fence_space::local_space);
+  unsigned int countingBlockNumLv2((countedBlockNumLv1 * voxelNumLv2 + countingThreadNumLv2 - 1) / countingThreadNumLv2);
 
-  if (test)
-  {
-    unsigned int bIdx1(blockIndicesLv1[id1]);
-    unsigned int bIdx2;
-    unsigned int x1, y1, z1;
-    unsigned int x2, y2, z2;
-    unsigned int tp1(bIdx1);
-    unsigned int tp2((tid + item.get_group(0) * countingThreadNumLv2) % voxelNumLv2);
-    x1 = tp1 % gridXLv1;
-    x2 = tp2 % blockXLv2;
-    tp1 /= gridXLv1;
-    tp2 /= blockXLv2;
-    y1 = tp1 % gridYLv1;
-    y2 = tp2 % blockYLv2;
-    z1 = tp1 / gridYLv1;
-    z2 = tp2 / blockYLv2;
-    bIdx2 = x2 + blockXLv2 * (x1 + gridXLv1 * (y2 + blockYLv2 * (y1 + gridYLv1 * (z1 * blockZLv2 + z2))));
-    blockIndicesLv2[testSum + sums[31] - 1] = bIdx2;
-  }
+  Kokkos::parallel_for("compact2", 
+  Kokkos::TeamPolicy<ExecSpace>(countingBlockNumLv2*countingThreadNumLv2, countingThreadNumLv2)
+  .set_scratch_size(0, Kokkos::PerTeam(32*sizeof(unsigned int))), 
+  KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
+    constexpr unsigned int warpNum(countingThreadNumLv2 / 32);
+    unsigned int tid(memT.team_rank());
+    unsigned int laneid = tid % 32;
+    unsigned int warpid(tid >> 5);
+    unsigned int id0(tid + memT.league_rank() * countingThreadNumLv2);
+    unsigned int id1(id0 / voxelNumLv2);
+    unsigned int test;
+    unsigned int* sums = (unsigned int*) memT.team_shmem().get_shmem(32*sizeof(unsigned int));
+
+    if (id1 < counterBlockNumLv1)
+    {
+      if (minMax[2 * id0] <= isoValue && minMax[2 * id0 + 1] >= isoValue)
+        test = 1;
+      else
+        test = 0;
+    }
+    else test = 0;
+    unsigned int testSum(test);
+  #pragma unroll
+    for (int c0(1); c0 < 32; c0 *= 2)
+    {
+      unsigned int tp(Kokkos::shfl_up(memT, testSum, c0));
+      if (laneid >= c0) testSum += tp;
+    }
+    if (laneid == 31) sums[warpid] = testSum;
+    memT.team_barrier();
+    if (warpid == 0)
+    {
+      unsigned int warpSum = sums[laneid];
+  #pragma unroll
+      for (int c0(1); c0 < warpNum; c0 *= 2)
+      {
+        unsigned int tp(Kokkos::shfl_up(memT, warpSum, c0));
+        if (laneid >= c0)warpSum += tp;
+      }
+      sums[laneid] = warpSum;
+    }
+    memT.team_barrier();
+    if (warpid != 0) testSum += sums[warpid - 1];
+    if (tid == countingThreadNumLv2 - 1) {
+      Kokkos::atomic_add(&countedBlockNumLv2[0], testSum);
+      sums[31] = testSum;
+    }
+    memT.team_barrier();
+
+    if (test)
+    {
+      unsigned int bIdx1(blockIndicesLv1[id1]);
+      unsigned int bIdx2;
+      unsigned int x1, y1, z1;
+      unsigned int x2, y2, z2;
+      unsigned int tp1(bIdx1);
+      unsigned int tp2((tid + memT.league_rank() * countingThreadNumLv2) % voxelNumLv2);
+      x1 = tp1 % gridXLv1;
+      x2 = tp2 % blockXLv2;
+      tp1 /= gridXLv1;
+      tp2 /= blockXLv2;
+      y1 = tp1 % gridYLv1;
+      y2 = tp2 % blockYLv2;
+      z1 = tp1 / gridYLv1;
+      z2 = tp2 / blockYLv2;
+      bIdx2 = x2 + blockXLv2 * (x1 + gridXLv1 * (y2 + blockYLv2 * (y1 + gridYLv1 * (z1 * blockZLv2 + z2))));
+      blockIndicesLv2[testSum + sums[31] - 1] = bIdx2;
+    }
+  });
 }
 
 int main(int argc, char* argv[])
@@ -363,17 +371,17 @@ int main(int argc, char* argv[])
   Kokkos::View<float*, Layout, MemSpace> coordZDevice = Kokkos::View<float*, Layout, MemSpace>("coordZDevice", 1);
   Kokkos::View<float*, Layout, MemSpace> coordZPDevice = Kokkos::View<float*, Layout, MemSpace>("coordZPDevice", 1);
 
-  const sycl::range<3> BlockSizeLv1{ 1, voxelYLv1, voxelXLv1};
-  const sycl::range<3> GridSizeLv1{ gridZLv1, gridYLv1, gridXLv1 };
-  const sycl::range<2> BlockSizeLv2{ blockXLv2 * blockYLv2, voxelXLv2 * voxelYLv2 };
-  const sycl::range<3> BlockSizeGenerating{ voxelZLv2, voxelYLv2, voxelXLv2 };
-
   float isoValue(-0.9f);
 
   unsigned int countedBlockNumLv1;
   unsigned int countedBlockNumLv2;
   unsigned int countedVerticesNum;
   unsigned int countedTrianglesNum;
+
+  Kokkos::View<unsigned int*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vcountedBlockNumLv1(&countedBlockNumLv1, 1);
+  Kokkos::View<unsigned int*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vcountedBlockNumLv2(&countedBlockNumLv2, 1);
+  Kokkos::View<unsigned int*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vcountedVerticesNum(&countedVerticesNum, 1);
+  Kokkos::View<unsigned int*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vcountedTrianglesNum(&countedTrianglesNum, 1);
 
   float time(0.f);
 
@@ -394,51 +402,14 @@ int main(int argc, char* argv[])
     computeMinMaxLv1(&minMaxLv1Device);
 
     compactLv1(isoValue, &minMaxLv1Device, &blockIndicesLv1Device, &countedBlockNumLv1Device);
-    q.submit([&] (sycl::handler &cgh) {
-      sycl::local_accessor<unsigned int, 1> smem (sycl::range<1>(32), cgh);
-      cgh.parallel_for<class compact1>(sycl::nd_range<1>(
-        sycl::range<1>(countingBlockNumLv1*countingThreadNumLv1),
-        sycl::range<1>(countingThreadNumLv1)), [=] (sycl::nd_item<1> item) {
-        compactLv1(isoValue,
-                   &minMaxLv1Device,
-                   &blockIndicesLv1Device,
-                   &countedBlockNumLv1Device);
-      });
-    });
+    Kokkos::deep_copy(vcountedBlockNumLv1, countedBlockNumLv1Device);
 
-    q.memcpy(&countedBlockNumLv1, countedBlockNumLv1Device, sizeof(unsigned int));
-
-    float *minMaxLv2Device = sycl::malloc_device<float>(countedBlockNumLv1 * voxelNumLv2 * 2, q);
-
+    Kokkos::View<float*, Layout, MemSpace> minMaxLv2Device = Kokkos::View<float*, Layout, MemSpace>("minMaxLv2Device", countedBlockNumLv1 * voxelNumLv2 * 2);
     computeMinMaxLv2(&blockIndicesLv1Device, &minMaxLv2Device);
 
-    q.submit([&] (sycl::handler &cgh) {
-      cgh.parallel_for<class min_max2>(
-        sycl::nd_range<2>(GridSizeLv2*BlockSizeLv2, BlockSizeLv2), [=] (sycl::nd_item<2> item) {
-        computeMinMaxLv2(blockIndicesLv1Device, minMaxLv2Device, item);
-      });
-    });
-
-    unsigned int *blockIndicesLv2Device = sycl::malloc_device<unsigned int>(countedBlockNumLv1 * voxelNumLv2, q);
-    unsigned int countingBlockNumLv2((countedBlockNumLv1 * voxelNumLv2 + countingThreadNumLv2 - 1) / countingThreadNumLv2);
-
-    q.submit([&] (sycl::handler &cgh) {
-      sycl::local_accessor<unsigned int, 1> smem (sycl::range<1>(32), cgh);
-      cgh.parallel_for<class compact2>(sycl::nd_range<1>(
-        sycl::range<1>(countingBlockNumLv2*countingThreadNumLv2),
-        sycl::range<1>(countingThreadNumLv2)), [=] (sycl::nd_item<1> item) {
-        compactLv2(isoValue,
-                     minMaxLv2Device,
-                     blockIndicesLv1Device,
-                     blockIndicesLv2Device,
-                     countedBlockNumLv1,
-                     countedBlockNumLv2Device,
-                     smem.get_pointer(),
-                     item);
-      });
-    });
-
-    q.memcpy(&countedBlockNumLv2, countedBlockNumLv2Device, sizeof(unsigned int)).wait();
+    Kokkos::View<unsigned int*, Layout, MemSpace> blockIndicesLv2Device = Kokkos::View<unsigned int*, Layout, MemSpace>("blockIndicesLv2Device", countedBlockNumLv1 * voxelNumLv2);
+    compactLv2(isoValue, minMaxLv2Device, blockIndicesLv1Device, blockIndicesLv2Device, countedBlockNumLv1, countedBlockNumLv2Device);
+    Kokkos::deep_copy(vcountedBlockNumLv2, countedBlockNumLv2Device);
 
     auto start = std::chrono::steady_clock::now();
 
@@ -601,17 +572,15 @@ int main(int argc, char* argv[])
         atomicAdd(coordZPDevice, zp);
       });
     }).wait();
+    Kokkos::fence();
 
     auto end = std::chrono::steady_clock::now();
     auto ktime = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
     time += ktime;
 
-    q.memcpy(&countedVerticesNum, countedVerticesNumDevice, sizeof(unsigned int));
-    q.memcpy(&countedTrianglesNum, countedTrianglesNumDevice, sizeof(unsigned int));
-    q.wait();
-
-    sycl::free(minMaxLv2Device, q);
-    sycl::free(blockIndicesLv2Device, q);
+    Kokkos::deep_copy(vcountedVerticesNum, countedVerticesNumDevice);
+    Kokkos::deep_copy(vcountedTrianglesNum, countedTrianglesNumDevice);
+    Kokkos::fence();
   }
 
   printf("Block Lv1: %u\nBlock Lv2: %u\n", countedBlockNumLv1, countedBlockNumLv2);
