@@ -50,7 +50,6 @@ void compute_costs(
                               w, h, current_w);
   });
 #endif
-  Kokkos::fence();
 }
 
 void compute_M(
@@ -112,7 +111,6 @@ void compute_M(
       base_row = base_row + (COMPUTE_M_BLOCKSIZE_X/2) - 1;
     }
   }
-  Kokkos::fence();
 #endif
 #ifdef COMPUTE_M_SINGLE
 
@@ -169,7 +167,6 @@ void compute_M(
 
 #endif
 #endif
-  Kokkos::fence();
 }
 
 void find_min_index(
@@ -205,7 +202,6 @@ void find_min_index(
     });
     reduce_num_elements = num_blocks_x;
   }while(reduce_num_elements > 1);
-  Kokkos::fence();
 }
 
 void find_seam(
@@ -220,7 +216,6 @@ void find_seam(
   KOKKOS_LAMBDA(int x){
     find_seam_kernel(d_M, d_indices, d_seam, w, h, current_w);
   });
-  Kokkos::fence();
 }
 
 void remove_seam(
@@ -247,7 +242,6 @@ void remove_seam(
                         d_seam,
                         w, h, current_w);
   });
-  Kokkos::fence();
 }
 
 void update_costs(
@@ -283,7 +277,6 @@ void update_costs(
                            d_seam,
                            w, h, current_w);
   });
-  Kokkos::fence();
 }
 
 void approx_setup(
@@ -319,7 +312,6 @@ void approx_setup(
                         d_M,
                         w, h, current_w);
   });
-  Kokkos::fence();
 }
 
 void approx_M(int current_w, int w, int h, int *d_offset_map, int *d_M) {
@@ -347,7 +339,6 @@ void approx_M(int current_w, int w, int h, int *d_offset_map, int *d_M) {
     num_blocks_y = num_blocks_y / 2;
     step = step * 2;
   }
-  Kokkos::fence();
 }
 
 void approx_seam(
@@ -362,5 +353,4 @@ void approx_seam(
   KOKKOS_LAMBDA(int x){
     approx_seam_kernel(d_index_map, d_indices, d_seam, w, h);
   });
-  Kokkos::fence();
 }
