@@ -1,10 +1,17 @@
-#include <sycl/sycl.hpp>
+#include <Kokkos_Core.hpp>
 
-using uchar4 = sycl::uchar4;
+#if defined(INTEL_GPU)
+typedef Kokkos::Experimental::SYCL ExecSpace;
+typedef Kokkos::Experimental::SYCLDeviceUSMSpace MemSpace; //also available SYCLSharedUSMSpace
+#elif defined(NVIDIA_GPU)
+typedef Kokkos::Cuda ExecSpace;
+typedef Kokkos::CudaSpace MemSpace;
+#else //CPU
+typedef Kokkos::OpenMP ExecSpace;
+typedef Kokkos::HostSpace MemSpace;
+#endif
 
-//#define COMPUTE_COSTS_FULL
-//#define COMPUTE_M_SINGLE
-//#define COMPUTE_M_ITERATE
+typedef Kokkos::LayoutRight Layout;
 
 const int COSTS_BLOCKSIZE_X = 32;
 const int COSTS_BLOCKSIZE_Y = 8;
@@ -27,15 +34,7 @@ const int APPROX_M_BLOCKSIZE_X = 128;
 
 #define BORDER_PIXEL {0,0,0}
 
-#define syncthreads() item.barrier(sycl::access::fence_space::local_space);
-
-pixel pixel_from_uchar4(uchar4 uc4){
-  pixel pix;
-  pix.r = (int)uc4.x();
-  pix.g = (int)uc4.y();
-  pix.b = (int)uc4.z();
-  return pix;
-}
+#define syncthreads() memT.team_barrier();
 
 void pointer_swap(void **p1, void **p2){
   void *tmp;
@@ -47,7 +46,7 @@ void pointer_swap(void **p1, void **p2){
 KOKKOS_INLINE_FUNCTION void compute_costs_kernel(
     Kokkos::TeamPolicy<ExecSpace>::member_type memT,
     pixel *__restrict__ pix_cache,
-    const uchar4 *__restrict__ d_pixels,
+    const pixel *__restrict__ d_pixels,
     short *__restrict__ d_costs_left,
     short *__restrict__ d_costs_up,
     short *__restrict__ d_costs_right,
@@ -55,10 +54,10 @@ KOKKOS_INLINE_FUNCTION void compute_costs_kernel(
 {
   //first row, first column and last column of shared memory are reserved for halo...
   //...and the global index in the image is computed accordingly to this
-  int blockIdx_y = item.get_group(0);
-  int blockIdx_x = item.get_group(1);
-  int threadIdx_y = item.get_local_id(0);
-  int threadIdx_x = item.get_local_id(1);
+  int blockIdx_y = memT.league_rank() / COSTS_BLOCKSIZE_X;
+  int blockIdx_x = memT.league_rank() % COSTS_BLOCKSIZE_X;
+  int threadIdx_y = memT.team_rank() / (current_w-1);
+  int threadIdx_x = memT.team_rank() % (current_w-1);
   int row = blockIdx_y*(COSTS_BLOCKSIZE_Y-1) + threadIdx_y -1 ;
   int column = blockIdx_x*(COSTS_BLOCKSIZE_X-2) + threadIdx_x -1;
   int ix = row*w + column;
@@ -68,7 +67,7 @@ KOKKOS_INLINE_FUNCTION void compute_costs_kernel(
 
   if(row >= 0 && row < h && column >= 0 && column < current_w){
     active = 1;
-    pix_cache[cache_row * COSTS_BLOCKSIZE_X + cache_column] = pixel_from_uchar4(d_pixels[ix]);
+    pix_cache[cache_row * COSTS_BLOCKSIZE_X + cache_column] = d_pixels[ix];
   }
   else{
     pix_cache[cache_row * COSTS_BLOCKSIZE_X + cache_column] = BORDER_PIXEL;
@@ -88,23 +87,23 @@ KOKKOS_INLINE_FUNCTION void compute_costs_kernel(
     pix3 = pix_cache[(cache_row-1) * COSTS_BLOCKSIZE_X + cache_column];
 
     //compute partials
-    p_r = sycl::abs(pix1.r - pix2.r);
-    p_g = sycl::abs(pix1.g - pix2.g);
-    p_b = sycl::abs(pix1.b - pix2.b);
+    p_r = Kokkos::abs(pix1.r - pix2.r);
+    p_g = Kokkos::abs(pix1.g - pix2.g);
+    p_b = Kokkos::abs(pix1.b - pix2.b);
 
     //compute left cost
-    rdiff = p_r + sycl::abs(pix3.r - pix2.r);
-    gdiff = p_g + sycl::abs(pix3.g - pix2.g);
-    bdiff = p_b + sycl::abs(pix3.b - pix2.b);
+    rdiff = p_r + Kokkos::abs(pix3.r - pix2.r);
+    gdiff = p_g + Kokkos::abs(pix3.g - pix2.g);
+    bdiff = p_b + Kokkos::abs(pix3.b - pix2.b);
     d_costs_left[ix] = rdiff + gdiff + bdiff;
 
     //compute up cost
     d_costs_up[ix] = p_r + p_g + p_b;
 
     //compute right cost
-    rdiff = p_r + sycl::abs(pix3.r - pix1.r);
-    gdiff = p_g + sycl::abs(pix3.g - pix1.g);
-    bdiff = p_b + sycl::abs(pix3.b - pix1.b);
+    rdiff = p_r + Kokkos::abs(pix3.r - pix1.r);
+    gdiff = p_g + Kokkos::abs(pix3.g - pix1.g);
+    bdiff = p_b + Kokkos::abs(pix3.b - pix1.b);
     d_costs_right[ix] = rdiff + gdiff + bdiff;
   }
 }
@@ -112,16 +111,16 @@ KOKKOS_INLINE_FUNCTION void compute_costs_kernel(
 KOKKOS_INLINE_FUNCTION void compute_costs_full_kernel(
     Kokkos::TeamPolicy<ExecSpace>::member_type memT,
     pixel *__restrict__ pix_cache,
-    const uchar4* __restrict__ d_pixels,
+    const pixel* __restrict__ d_pixels,
     short *__restrict__ d_costs_left,
     short *__restrict__ d_costs_up,
     short *__restrict__ d_costs_right,
     int w, int h, int current_w)
 {
-  int blockIdx_y = item.get_group(0);
-  int blockIdx_x = item.get_group(1);
-  int threadIdx_y = item.get_local_id(0);
-  int threadIdx_x = item.get_local_id(1);
+  int blockIdx_y = memT.league_rank() / COSTS_BLOCKSIZE_X;
+  int blockIdx_x = memT.league_rank() % COSTS_BLOCKSIZE_X;
+  int threadIdx_y = memT.team_rank() / (current_w-1);
+  int threadIdx_x = memT.team_rank() % (current_w-1);
   int row = blockIdx_y*COSTS_BLOCKSIZE_Y + threadIdx_y;
   int column = blockIdx_x*COSTS_BLOCKSIZE_X + threadIdx_x;
   int ix = row*w + column;
@@ -135,21 +134,21 @@ KOKKOS_INLINE_FUNCTION void compute_costs_full_kernel(
       if(column == 0)
         pix_cache[cache_row * (COSTS_BLOCKSIZE_X+2)] = BORDER_PIXEL;
       else
-        pix_cache[cache_row * (COSTS_BLOCKSIZE_X+2)] = pixel_from_uchar4(d_pixels[ix-1]);
+        pix_cache[cache_row * (COSTS_BLOCKSIZE_X+2)] = d_pixels[ix-1];
     }
     if(threadIdx_x == COSTS_BLOCKSIZE_X-1 || column == current_w-1){
       if(column == current_w-1)
         pix_cache[cache_row * (COSTS_BLOCKSIZE_X+2) + cache_column+1] = BORDER_PIXEL;
       else
-        pix_cache[cache_row * (COSTS_BLOCKSIZE_X+2) + COSTS_BLOCKSIZE_X+1] = pixel_from_uchar4(d_pixels[ix+1]);
+        pix_cache[cache_row * (COSTS_BLOCKSIZE_X+2) + COSTS_BLOCKSIZE_X+1] = d_pixels[ix+1];
     }
     if(threadIdx_y == 0){
       if(row == 0)
         pix_cache[cache_column] = BORDER_PIXEL;
       else
-        pix_cache[cache_column] = pixel_from_uchar4(d_pixels[ix-w]);
+        pix_cache[cache_column] = d_pixels[ix-w];
     }
-    pix_cache[cache_row * (COSTS_BLOCKSIZE_X+2) + cache_column] = pixel_from_uchar4(d_pixels[ix]);
+    pix_cache[cache_row * (COSTS_BLOCKSIZE_X+2) + cache_column] = d_pixels[ix];
   }
 
   syncthreads();
@@ -164,29 +163,29 @@ KOKKOS_INLINE_FUNCTION void compute_costs_full_kernel(
     pix3 = pix_cache[(cache_row-1) * (COSTS_BLOCKSIZE_X+2) + cache_column];
 
     //compute partials
-    p_r = sycl::abs(pix1.r - pix2.r);
-    p_g = sycl::abs(pix1.g - pix2.g);
-    p_b = sycl::abs(pix1.b - pix2.b);
+    p_r = Kokkos::abs(pix1.r - pix2.r);
+    p_g = Kokkos::abs(pix1.g - pix2.g);
+    p_b = Kokkos::abs(pix1.b - pix2.b);
 
     //compute left cost
-    rdiff = p_r + sycl::abs(pix3.r - pix2.r);
-    gdiff = p_g + sycl::abs(pix3.g - pix2.g);
-    bdiff = p_b + sycl::abs(pix3.b - pix2.b);
+    rdiff = p_r + Kokkos::abs(pix3.r - pix2.r);
+    gdiff = p_g + Kokkos::abs(pix3.g - pix2.g);
+    bdiff = p_b + Kokkos::abs(pix3.b - pix2.b);
     d_costs_left[ix] = rdiff + gdiff + bdiff;
 
     //compute up cost
     d_costs_up[ix] = p_r + p_g + p_b;
 
     //compute right cost
-    rdiff = p_r + sycl::abs(pix3.r - pix1.r);
-    gdiff = p_g + sycl::abs(pix3.g - pix1.g);
-    bdiff = p_b + sycl::abs(pix3.b - pix1.b);
+    rdiff = p_r + Kokkos::abs(pix3.r - pix1.r);
+    gdiff = p_g + Kokkos::abs(pix3.g - pix1.g);
+    bdiff = p_b + Kokkos::abs(pix3.b - pix1.b);
     d_costs_right[ix] = rdiff + gdiff + bdiff;
   }
 }
 
-void compute_M_kernel_step1(
-    sycl::nd_item<1> &item,
+KOKKOS_INLINE_FUNCTION void compute_M_kernel_step1(
+    Kokkos::TeamPolicy<ExecSpace>::member_type memT,
     int *__restrict__  cache,
     const short *__restrict__ d_costs_left,
     const short *__restrict__ d_costs_up,
@@ -194,9 +193,9 @@ void compute_M_kernel_step1(
     int* __restrict__ d_M,
     int w, int h, int current_w, int base_row)
 {
-  int blockIdx_x = item.get_group(0);
-  int threadIdx_x = item.get_local_id(0);
-  int gridDim_x = item.get_group_range(0);
+  int blockIdx_x = memT.league_rank();
+  int threadIdx_x = memT.team_rank();
+  int gridDim_x = memT.team_size();
   int *m_cache = cache;
   int *m_cache_swap = &(cache[COMPUTE_M_BLOCKSIZE_X]);
   int column = blockIdx_x*COMPUTE_M_BLOCKSIZE_X + threadIdx_x;
@@ -209,7 +208,7 @@ void compute_M_kernel_step1(
 
   if(column < current_w){
     if(base_row == 0){
-      left = std::min(d_costs_left[ix], std::min(d_costs_up[ix], d_costs_right[ix]));
+      left = Kokkos::min(d_costs_left[ix], Kokkos::min(d_costs_up[ix], d_costs_right[ix]));
       m_cache[cache_column] = left;
       d_M[ix] = left;
     }
@@ -238,7 +237,7 @@ void compute_M_kernel_step1(
       else
         right = INT_MAX;
 
-      left = std::min(left, std::min(up, right));
+      left = Kokkos::min(left, Kokkos::min(up, right));
       d_M[ix] = left;
       //swap read/write shared memory
       pointer_swap((void**)&m_cache, (void**)&m_cache_swap);
@@ -249,16 +248,16 @@ void compute_M_kernel_step1(
   }
 }
 
-void compute_M_kernel_step2(
-    sycl::nd_item<1> &item,
+KOKKOS_INLINE_FUNCTION void compute_M_kernel_step2(
+    Kokkos::TeamPolicy<ExecSpace>::member_type memT,
     const short *__restrict__ d_costs_left,
     const short *__restrict__ d_costs_up,
     const short *__restrict__ d_costs_right,
     int* __restrict__ d_M,
     int w, int h, int current_w, int base_row)
 {
-  int blockIdx_x = item.get_group(0);
-  int threadIdx_x = item.get_local_id(0);
+  int blockIdx_x = memT.league_rank();
+  int threadIdx_x = memT.team_rank();
   int column = blockIdx_x*COMPUTE_M_BLOCKSIZE_X + threadIdx_x + COMPUTE_M_BLOCKSIZE_X/2;
   int right, up, left;
 
@@ -281,7 +280,7 @@ void compute_M_kernel_step2(
       else
         right = INT_MAX;
 
-      left = std::min(left, std::min(up, right));
+      left = Kokkos::min(left, Kokkos::min(up, right));
       d_M[ix] = left;
     }
     prev_ix = ix;
@@ -300,12 +299,12 @@ KOKKOS_INLINE_FUNCTION void compute_M_kernel_small(
 {
   int *m_cache = cache;
   int *m_cache_swap = &(cache[current_w]);
-  int column = item.get_local_id(0);
+  int column = memT.team_rank();
   int ix = column;
   int left, up, right;
 
   //first row
-  left = std::min(d_costs_left[ix], std::min(d_costs_up[ix], d_costs_right[ix]));
+  left = Kokkos::min(d_costs_left[ix], Kokkos::min(d_costs_up[ix], d_costs_right[ix]));
   d_M[ix] = left;
   m_cache[ix] = left;
 
@@ -329,7 +328,7 @@ KOKKOS_INLINE_FUNCTION void compute_M_kernel_small(
       else
         right = INT_MAX;
 
-      left = std::min(left, std::min(up, right));
+      left = Kokkos::min(left, Kokkos::min(up, right));
       d_M[ix] = left;
       //swap read/write shared memory
       pointer_swap((void**)&m_cache, (void**)&m_cache_swap);
@@ -339,8 +338,8 @@ KOKKOS_INLINE_FUNCTION void compute_M_kernel_small(
   }
 }
 
-void compute_M_kernel_single(
-    sycl::nd_item<1> &item,
+KOKKOS_INLINE_FUNCTION void compute_M_kernel_single(
+   Kokkos::TeamPolicy<ExecSpace>::member_type memT,
     int *__restrict__ cache,
     const short *__restrict__ d_costs_left,
     const short *__restrict__ d_costs_up,
@@ -350,16 +349,16 @@ void compute_M_kernel_single(
 {
   int *m_cache = cache;
   int *m_cache_swap = &(cache[current_w]);
-  int tid = item.get_local_id(0);
+  int tid = memT.team_rank();
   int column;
   int ix;
   int left, up, right;
 
   //first row
   for(int i = 0; i < n_elem; i++){
-    column = tid + i*item.get_local_range(0);
+    column = tid + i*memT.team_size();
     if(column < current_w){
-      left = std::min(d_costs_left[column], std::min(d_costs_up[column], d_costs_right[column]));
+      left = Kokkos::min(d_costs_left[column], Kokkos::min(d_costs_up[column], d_costs_right[column]));
       d_M[column] = left;
       m_cache[column] = left;
     }
@@ -370,7 +369,7 @@ void compute_M_kernel_single(
   //other rows
   for(int row = 1; row < h; row++){
     for(int i = 0; i < n_elem; i++){
-      column = tid + i*item.get_local_range(0);
+      column = tid + i*memT.team_size();
       if(column < current_w){
         ix = row*w + column;
 
@@ -389,7 +388,7 @@ void compute_M_kernel_single(
         else
           right = INT_MAX;
 
-        left = std::min(left, std::min(up, right));
+        left = Kokkos::min(left, Kokkos::min(up, right));
         d_M[ix] = left;
         m_cache_swap[column] = left;
       }
@@ -401,29 +400,29 @@ void compute_M_kernel_single(
 }
 
 //compute M one row at a time with multiple kernel calls for global synchronization
-void compute_M_kernel_iterate0(
-    sycl::nd_item<1> &item,
+KOKKOS_INLINE_FUNCTION void compute_M_kernel_iterate0(
+    Kokkos::TeamPolicy<ExecSpace>::member_type memT,
     const short *__restrict__ d_costs_left,
     const short *__restrict__ d_costs_up,
     const short *__restrict__ d_costs_right,
     int* __restrict__ d_M,
     int w, int current_w)
 {
-  int column = item.get_global_id(0);
+  int column = memT.league_rank() * memT.team_size() + memT.team_rank();
   if(column < current_w){
-    d_M[column] = std::min(d_costs_left[column], std::min(d_costs_up[column], d_costs_right[column]));
+    d_M[column] = Kokkos::min(d_costs_left[column], Kokkos::min(d_costs_up[column], d_costs_right[column]));
   }
 }
 
-void compute_M_kernel_iterate1(
-    sycl::nd_item<1> &item,
+KOKKOS_INLINE_FUNCTION void compute_M_kernel_iterate1(
+    Kokkos::TeamPolicy<ExecSpace>::member_type memT,
     const short *__restrict__ d_costs_left,
     const short *__restrict__ d_costs_up,
     const short *__restrict__ d_costs_right,
     int* __restrict__ d_M,
     int w, int current_w, int row)
 {
-  int column = item.get_global_id(0);
+  int column = memT.league_rank() * memT.team_size() + memT.team_rank();
   int ix = row*w + column;
   int prev_ix = ix - w;
   int left, up, right;
@@ -442,22 +441,22 @@ void compute_M_kernel_iterate1(
     else
       right = INT_MAX;
 
-    d_M[ix] = std::min(left, std::min(up, right));
+    d_M[ix] = Kokkos::min(left, Kokkos::min(up, right));
   }
 }
 
-void min_reduce(
-    sycl::nd_item<1> &item,
+KOKKOS_INLINE_FUNCTION void min_reduce(
+    Kokkos::TeamPolicy<ExecSpace>::member_type memT,
     int *__restrict__ val_cache,
     int *__restrict__ ix_cache,
     const int* __restrict__ d_values,
     int* __restrict__ d_indices,
     int size)
 {
-  int tid = item.get_local_id(0);
-  int bid = item.get_group(0);
+  int tid = memT.team_rank();
+  int bid = memT.league_rank();
   int column = bid*REDUCE_BLOCKSIZE_X + tid;
-  int grid_size = item.get_group_range(0)*REDUCE_BLOCKSIZE_X;
+  int grid_size = memT.team_size()*REDUCE_BLOCKSIZE_X;
   int min_v = INT_MAX;
   int min_i = 0;
   int new_i, new_v;
@@ -493,7 +492,7 @@ void min_reduce(
   }
 }
 
-void find_seam_kernel(
+KOKKOS_INLINE_FUNCTION void find_seam_kernel(
     const int *__restrict__ d_M,
     const int *__restrict__ d_indices,
     int *__restrict__ d_seam,
@@ -518,16 +517,13 @@ void find_seam_kernel(
   }
 }
 
-void remove_seam_kernel(
-    sycl::nd_item<2> &item,
-    const uchar4 *__restrict__ d_pixels,
-          uchar4 *__restrict__ d_pixels_swap,
+KOKKOS_INLINE_FUNCTION void remove_seam_kernel(
+    size_t row, size_t column,
+    const pixel *__restrict__ d_pixels,
+          pixel *__restrict__ d_pixels_swap,
     const int *__restrict__ d_seam,
     int w, int h, int current_w)
 {
-  int row = item.get_global_id(0);
-  int column = item.get_global_id(1);
-
   if(row < h && column < current_w-1){
     int seam_c = d_seam[row];
     int ix = row*w + column;
@@ -535,9 +531,9 @@ void remove_seam_kernel(
   }
 }
 
-void update_costs_kernel(
-    sycl::nd_item<2> &item,
-    const uchar4 *__restrict__ d_pixels,
+KOKKOS_INLINE_FUNCTION void update_costs_kernel(
+    size_t row, size_t column,
+    const pixel *__restrict__ d_pixels,
     const short *__restrict__ d_costs_left,
     const short *__restrict__ d_costs_up,
     const short *__restrict__ d_costs_right,
@@ -547,8 +543,6 @@ void update_costs_kernel(
     const int *__restrict__ d_seam,
     int w, int h, int current_w)
 {
-  int row = item.get_global_id(0);
-  int column = item.get_global_id(1);
 
   if(row < h && column < current_w-1){
     int seam_c = d_seam[row];
@@ -562,34 +556,34 @@ void update_costs_kernel(
       if(column == current_w-2)
         pix1 = BORDER_PIXEL;
       else
-        pix1 = pixel_from_uchar4(d_pixels[ix + 1]);
+        pix1 = d_pixels[ix + 1];
       if(column == 0)
         pix2 = BORDER_PIXEL;
       else
-        pix2 = pixel_from_uchar4(d_pixels[ix - 1]);
+        pix2 = d_pixels[ix - 1];
       if(row == 0)
         pix3 = BORDER_PIXEL;
       else
-        pix3 = pixel_from_uchar4(d_pixels[ix - w]);
+        pix3 = d_pixels[ix - w];
 
       //compute partials
-      p_r = sycl::abs(pix1.r - pix2.r);
-      p_g = sycl::abs(pix1.g - pix2.g);
-      p_b = sycl::abs(pix1.b - pix2.b);
+      p_r = Kokkos::abs(pix1.r - pix2.r);
+      p_g = Kokkos::abs(pix1.g - pix2.g);
+      p_b = Kokkos::abs(pix1.b - pix2.b);
 
       //compute left cost
-      rdiff = p_r + sycl::abs(pix3.r - pix2.r);
-      gdiff = p_g + sycl::abs(pix3.g - pix2.g);
-      bdiff = p_b + sycl::abs(pix3.b - pix2.b);
+      rdiff = p_r + Kokkos::abs(pix3.r - pix2.r);
+      gdiff = p_g + Kokkos::abs(pix3.g - pix2.g);
+      bdiff = p_b + Kokkos::abs(pix3.b - pix2.b);
       d_costs_swap_left[ix] = rdiff + gdiff + bdiff;
 
       //compute up cost
       d_costs_swap_up[ix] = p_r + p_g + p_b;
 
       //compute right cost
-      rdiff = p_r + sycl::abs(pix3.r - pix1.r);
-      gdiff = p_g + sycl::abs(pix3.g - pix1.g);
-      bdiff = p_b + sycl::abs(pix3.b - pix1.b);
+      rdiff = p_r + Kokkos::abs(pix3.r - pix1.r);
+      gdiff = p_g + Kokkos::abs(pix3.g - pix1.g);
+      bdiff = p_b + Kokkos::abs(pix3.b - pix1.b);
       d_costs_swap_right[ix] = rdiff + gdiff + bdiff;
     }
     else if(column > seam_c+1){
@@ -607,21 +601,20 @@ void update_costs_kernel(
   }
 }
 
-void approx_setup_kernel(
-    sycl::nd_item<2> &item,
+KOKKOS_INLINE_FUNCTION void approx_setup_kernel(
+    Kokkos::TeamPolicy<ExecSpace>::member_type memT,
     pixel *__restrict__ pix_cache,
     short *__restrict__ left_cache,
     short *__restrict__ up_cache,
     short *__restrict__ right_cache,
-    const uchar4 *__restrict__ d_pixels,
+    const pixel *__restrict__ d_pixels,
     int *__restrict__ d_index_map,
     int *__restrict__ d_offset_map,
-    int *__restrict__ d_M, int w, int h, int current_w)
-{
-  int blockIdx_y = item.get_group(0);
-  int blockIdx_x = item.get_group(1);
-  int threadIdx_y = item.get_local_id(0);
-  int threadIdx_x = item.get_local_id(1);
+    int *__restrict__ d_M, int w, int h, int current_w){
+  int blockIdx_y = memT.league_rank() / APPROX_SETUP_BLOCKSIZE_X;
+  int blockIdx_x = memT.league_rank() % APPROX_SETUP_BLOCKSIZE_X;
+  int threadIdx_y = memT.team_rank() / (current_w-1);
+  int threadIdx_x = memT.team_rank() % (current_w-1);
   int row = blockIdx_y*(APPROX_SETUP_BLOCKSIZE_Y-1) + threadIdx_y -1 ;
   int column = blockIdx_x*(APPROX_SETUP_BLOCKSIZE_X-4) + threadIdx_x -2; //WE NEED MORE HORIZONTAL HALO...
   int ix = row*w + column;
@@ -631,7 +624,7 @@ void approx_setup_kernel(
 
   if(row >= 0 && row < h && column >= 0 && column < current_w){
     active = 1;
-    pix_cache[cache_row * APPROX_SETUP_BLOCKSIZE_X + cache_column] = pixel_from_uchar4(d_pixels[ix]);
+    pix_cache[cache_row * APPROX_SETUP_BLOCKSIZE_X + cache_column] = d_pixels[ix];
   }
   else{
     pix_cache[cache_row * APPROX_SETUP_BLOCKSIZE_X + cache_column] = BORDER_PIXEL;
@@ -656,23 +649,23 @@ void approx_setup_kernel(
     pix3 = pix_cache[(cache_row-1) * APPROX_SETUP_BLOCKSIZE_X + cache_column];
 
     //compute partials
-    p_r = sycl::abs(pix1.r - pix2.r);
-    p_g = sycl::abs(pix1.g - pix2.g);
-    p_b = sycl::abs(pix1.b - pix2.b);
+    p_r = Kokkos::abs(pix1.r - pix2.r);
+    p_g = Kokkos::abs(pix1.g - pix2.g);
+    p_b = Kokkos::abs(pix1.b - pix2.b);
 
     //compute left cost
-    rdiff = p_r + sycl::abs(pix3.r - pix2.r);
-    gdiff = p_g + sycl::abs(pix3.g - pix2.g);
-    bdiff = p_b + sycl::abs(pix3.b - pix2.b);
+    rdiff = p_r + Kokkos::abs(pix3.r - pix2.r);
+    gdiff = p_g + Kokkos::abs(pix3.g - pix2.g);
+    bdiff = p_b + Kokkos::abs(pix3.b - pix2.b);
     left_cache[cache_row * APPROX_SETUP_BLOCKSIZE_X + cache_column] = rdiff + gdiff + bdiff;
 
     //compute up cost
     up_cache[cache_row * APPROX_SETUP_BLOCKSIZE_X + cache_column] = p_r + p_g + p_b;
 
     //compute right cost
-    rdiff = p_r + sycl::abs(pix3.r - pix1.r);
-    gdiff = p_g + sycl::abs(pix3.g - pix1.g);
-    bdiff = p_b + sycl::abs(pix3.b - pix1.b);
+    rdiff = p_r + Kokkos::abs(pix3.r - pix1.r);
+    gdiff = p_g + Kokkos::abs(pix3.g - pix1.g);
+    bdiff = p_b + Kokkos::abs(pix3.b - pix1.b);
     right_cache[cache_row * APPROX_SETUP_BLOCKSIZE_X + cache_column] = rdiff + gdiff + bdiff;
   }
 
@@ -709,25 +702,7 @@ void approx_setup_kernel(
   }
 }
 
-void approx_M_kernel(
-    sycl::nd_item<2> &item,
-    int *__restrict__ d_offset_map,
-    int *__restrict__ d_M,
-    int w, int h, int current_w, int step)
-{
-  int row = item.get_group(0)*2*step;
-  int next_row = row + step;
-  int column = item.get_group(1)*APPROX_M_BLOCKSIZE_X + item.get_local_id(1);
-  int ix = row*w + column;
-
-  if(next_row < h-1 && column < current_w){
-    int offset = d_offset_map[ix];
-    d_M[ix] += d_M[offset];
-    d_offset_map[ix] = d_offset_map[offset];
-  }
-}
-
-void approx_seam_kernel(
+KOKKOS_INLINE_FUNCTION void approx_seam_kernel(
     const int *__restrict__ d_index_map,
     const int *__restrict__ d_indices,
     int *__restrict__ d_seam,

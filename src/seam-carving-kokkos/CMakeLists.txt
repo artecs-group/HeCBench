@@ -75,7 +75,7 @@ target_link_libraries(${This} Kokkos::kokkos ${oneDPL_LIBRARIES})
 
 
 add_custom_target(run
-    COMMAND ./${This} ../seam-carving-cuda/Broadway_tower.jpg 100 -u
+    COMMAND ./${This} ../../seam-carving-cuda/Broadway_tower.jpg 100 -u
     DEPENDS ${PROJECT_BINARY_DIR}/${This}
     WORKING_DIRECTORY .
 )

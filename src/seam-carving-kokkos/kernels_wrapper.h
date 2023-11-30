@@ -1,23 +1,11 @@
 #include <Kokkos_Core.hpp>
-
-#if defined(INTEL_GPU)
-typedef Kokkos::Experimental::SYCL ExecSpace;
-typedef Kokkos::Experimental::SYCLDeviceUSMSpace MemSpace; //also available SYCLSharedUSMSpace
-#elif defined(NVIDIA_GPU)
-typedef Kokkos::Cuda ExecSpace;
-typedef Kokkos::CudaSpace MemSpace;
-#else //CPU
-typedef Kokkos::OpenMP ExecSpace;
-typedef Kokkos::HostSpace MemSpace;
-#endif
-
-typedef Kokkos::LayoutRight Layout;
+#include "kernels.h"
 
 /* ################# wrappers ################### */
 
 void compute_costs(
     int current_w, int w, int h,
-    uchar4 *d_pixels,
+    pixel *d_pixels,
     short *d_costs_left,
     short *d_costs_up,
     short *d_costs_right)
@@ -32,7 +20,7 @@ void compute_costs(
   Kokkos::TeamPolicy<ExecSpace>(gwsx*gwsy, lws)
   .set_scratch_size(0, Kokkos::PerTeam(COSTS_BLOCKSIZE_Y * COSTS_BLOCKSIZE_X * sizeof(pixel))), 
   KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
-    pixel* sm = (pixel*) memT.team_shmem().get_shmem(OSTS_BLOCKSIZE_Y * COSTS_BLOCKSIZE_X*sizeof(pixel));
+    pixel* sm = (pixel*) memT.team_shmem().get_shmem(COSTS_BLOCKSIZE_Y * COSTS_BLOCKSIZE_X*sizeof(pixel));
     compute_costs_kernel(memT,
                         sm,
                         d_pixels,
@@ -62,6 +50,7 @@ void compute_costs(
                               w, h, current_w);
   });
 #endif
+  Kokkos::fence();
 }
 
 void compute_M(
@@ -74,8 +63,6 @@ void compute_M(
 #if !defined(COMPUTE_M_SINGLE) && !defined(COMPUTE_M_ITERATE)
 
   if(current_w <= 256){
-    sycl::range<1> gws (current_w);
-    sycl::range<1> lws (current_w);
     //compute_M_kernel_small<<<num_blocks, threads_per_block, 2*current_w*sizeof(int)>>>(d_costs_left, d_costs_up, d_costs_right, d_M, w, h, current_w);
     Kokkos::parallel_for("compute_M_small", 
     Kokkos::TeamPolicy<ExecSpace>(current_w, current_w)
@@ -92,183 +79,181 @@ void compute_M(
     });
   }
   else{
-    sycl::range<1> lws (COMPUTE_M_BLOCKSIZE_X);
-    sycl::range<1> gws (COMPUTE_M_BLOCKSIZE_X * ((current_w-1)/COMPUTE_M_BLOCKSIZE_X + 1));
-    sycl::range<1> gws2 (COMPUTE_M_BLOCKSIZE_X * ((current_w-COMPUTE_M_BLOCKSIZE_X-1)/COMPUTE_M_BLOCKSIZE_X + 1));
-
     int num_iterations = (h-1)/(COMPUTE_M_BLOCKSIZE_X/2 - 1) + 1;
 
     int base_row = 0;
     for(int i = 0; i < num_iterations; i++){
       //compute_M_kernel_step1<<<num_blocks, threads_per_block>>>(d_costs_left, d_costs_up, d_costs_right, d_M, w, h, current_w, base_row);
-      q.submit([&] (sycl::handler &cgh) {
-        sycl::local_accessor<int, 1> sm (
-          sycl::range<1>(2*COMPUTE_M_BLOCKSIZE_X), cgh);
-        cgh.parallel_for<class compute_M_step1>(sycl::nd_range<1>(gws, lws), [=] (sycl::nd_item<1> item) {
-          compute_M_kernel_step1(item,
-                                 sm.get_pointer(),
-                                 d_costs_left,
-                                 d_costs_up,
-                                 d_costs_right,
-                                 d_M,
-                                 w, h, current_w, base_row);
-        });
+      Kokkos::parallel_for("compute_M_step1", 
+      Kokkos::TeamPolicy<ExecSpace>(COMPUTE_M_BLOCKSIZE_X * ((current_w-1)/COMPUTE_M_BLOCKSIZE_X + 1), COMPUTE_M_BLOCKSIZE_X)
+      .set_scratch_size(0, Kokkos::PerTeam(2*COMPUTE_M_BLOCKSIZE_X * sizeof(int))), 
+      KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
+        int* sm = (int*) memT.team_shmem().get_shmem(2*COMPUTE_M_BLOCKSIZE_X*sizeof(int));
+        compute_M_kernel_step1(memT,
+                          sm,
+                          d_costs_left,
+                          d_costs_up,
+                          d_costs_right,
+                          d_M,
+                          w, h, current_w, base_row);
       });
 
       //compute_M_kernel_step2<<<num_blocks2, threads_per_block>>>(d_costs_left, d_costs_up, d_costs_right, d_M, w, h, current_w, base_row);
-      q.submit([&] (sycl::handler &cgh) {
-        cgh.parallel_for<class compute_M_step2>(sycl::nd_range<1>(gws2, lws), [=] (sycl::nd_item<1> item) {
-          compute_M_kernel_step2(item,
-                                 d_costs_left,
-                                 d_costs_up,
-                                 d_costs_right,
-                                 d_M,
-                                 w, h, current_w, base_row);
-        });
+      Kokkos::parallel_for("compute_M_step2", 
+      Kokkos::TeamPolicy<ExecSpace>(COMPUTE_M_BLOCKSIZE_X * ((current_w-COMPUTE_M_BLOCKSIZE_X-1)/COMPUTE_M_BLOCKSIZE_X + 1), COMPUTE_M_BLOCKSIZE_X), 
+      KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
+        compute_M_kernel_step2(memT,
+                                d_costs_left,
+                                d_costs_up,
+                                d_costs_right,
+                                d_M,
+                                w, h, current_w, base_row);
       });
-
       base_row = base_row + (COMPUTE_M_BLOCKSIZE_X/2) - 1;
     }
   }
-
+  Kokkos::fence();
 #endif
 #ifdef COMPUTE_M_SINGLE
 
   int block_size = std::min(256, next_pow2(current_w));
-  sycl::range<1> lws (block_size);
-  sycl::range<1> gws (block_size);
+  size_t lws (block_size);
+  size_t gws (block_size);
 
   int num_el = (current_w-1)/block_size + 1;
   //compute_M_kernel_single<<<num_blocks, threads_per_block, 2*current_w*sizeof(int)>>>(d_costs_left, d_costs_up, d_costs_right, d_M, w, h, current_w, num_el);
-  q.submit([&] (sycl::handler &cgh) {
-    sycl::local_accessor<int> sm (2*current_w, cgh);
-    cgh.parallel_for<class compute_M_single>(sycl::nd_range<1>(gws, lws), [=] (sycl::nd_item<1> item) {
-      compute_M_kernel_single(item,
-                              sm.get_pointer(),
-                              d_costs_left,
-                              d_costs_up,
-                              d_costs_right,
-                              d_M,
-                              w, h, current_w, num_el);
-      });
-    });
-
+  Kokkos::parallel_for("compute_M_single", 
+  Kokkos::TeamPolicy<ExecSpace>(gws, lws)
+  .set_scratch_size(0, Kokkos::PerTeam(2*current_w * sizeof(int))), 
+  KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
+    int* sm = (int*) memT.team_shmem().get_shmem(2*current_w*sizeof(int));
+    compute_M_kernel_single(memT,
+                            sm.get_pointer(),
+                            d_costs_left,
+                            d_costs_up,
+                            d_costs_right,
+                            d_M,
+                            w, h, current_w, num_el);
+  });
 #else
 #ifdef COMPUTE_M_ITERATE
 
-  sycl::range<1> gws (COMPUTE_M_BLOCKSIZE_X * ((current_w-1)/COMPUTE_M_BLOCKSIZE_X + 1));
-  sycl::range<1> lws (COMPUTE_M_BLOCKSIZE_X);
+  size_t gws (COMPUTE_M_BLOCKSIZE_X * ((current_w-1)/COMPUTE_M_BLOCKSIZE_X + 1));
+  size_t lws (COMPUTE_M_BLOCKSIZE_X);
 
   //compute_M_kernel_iterate0<<<num_blocks, threads_per_block>>>(d_costs_left, d_costs_up, d_costs_right, d_M, w, current_w);
-  q.submit([&] (sycl::handler &cgh) {
-    cgh.parallel_for<class compute_M_iter0>(sycl::nd_range<1>(gws, lws), [=] (sycl::nd_item<1> item) {
-      compute_M_kernel_iterate0(item,
+  Kokkos::parallel_for("compute_M_iter0", 
+  Kokkos::TeamPolicy<ExecSpace>(gws, lws), 
+  KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
+      compute_M_kernel_iterate0(memT,
                                 d_costs_left,
                                 d_costs_up,
                                 d_costs_right,
                                 d_M,
                                 w, current_w);
-      });
-    });
+  }); 
 
   for(int row = 1; row < h; row++){
   //  compute_M_kernel_iterate1<<<num_blocks, threads_per_block>>>(d_costs_left, d_costs_up, d_costs_right, d_M, w, current_w, row);
-    q.submit([&] (sycl::handler &cgh) {
-      cgh.parallel_for<class compute_M_iter1>(sycl::nd_range<1>(gws, lws), [=] (sycl::nd_item<1> item) {
-        compute_M_kernel_iterate1(item,
+    Kokkos::parallel_for("compute_M_iter1", 
+    Kokkos::TeamPolicy<ExecSpace>(COMPUTE_M_BLOCKSIZE_X * ((current_w-1)/COMPUTE_M_BLOCKSIZE_X + 1), COMPUTE_M_BLOCKSIZE_X), 
+    KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
+        compute_M_kernel_iterate1(memT,
                                   d_costs_left,
                                   d_costs_up,
                                   d_costs_right,
                                   d_M,
                                   w, current_w, row);
-        });
-      });
-    }
+    }); 
+  }
 
 #endif
 #endif
+  Kokkos::fence();
 }
 
 void find_min_index(
-    sycl::queue &q,
     int current_w,
     int *d_indices_ref,
     int *d_indices,
     int *reduce_row)
 {
   //set the reference index array
-  q.memcpy(d_indices, d_indices_ref, current_w*sizeof(int));
+  Kokkos::Impl::DeepCopy<MemSpace, MemSpace>(d_indices, d_indices_ref, current_w*sizeof(int));
+  Kokkos::fence();
 
-  sycl::range<1> lws (REDUCE_BLOCKSIZE_X);
-  sycl::range<1> gws (1);
+  size_t lws (REDUCE_BLOCKSIZE_X);
+  size_t gws (1);
 
   int reduce_num_elements = current_w;
   do{
     int num_blocks_x = (reduce_num_elements-1)/(REDUCE_BLOCKSIZE_X*REDUCE_ELEMENTS_PER_THREAD) + 1;
-    gws[0] = REDUCE_BLOCKSIZE_X * num_blocks_x;
+    gws = REDUCE_BLOCKSIZE_X * num_blocks_x;
     // min_reduce<<<num_blocks, threads_per_block>>>(reduce_row, d_indices, reduce_num_elements);
-    q.submit([&] (sycl::handler &cgh) {
-      sycl::local_accessor<int, 1> sm_val (sycl::range<1>(REDUCE_BLOCKSIZE_X), cgh);
-      sycl::local_accessor<int, 1> sm_ix (sycl::range<1>(REDUCE_BLOCKSIZE_X), cgh);
-      cgh.parallel_for<class reduce>(sycl::nd_range<1>(gws, lws), [=] (sycl::nd_item<1> item) {
-        min_reduce(item,
-                   sm_val.get_pointer(),
-                   sm_ix.get_pointer(),
-                   reduce_row,
-                   d_indices,
-                   reduce_num_elements);
-      });
+    Kokkos::parallel_for("reduce", 
+    Kokkos::TeamPolicy<ExecSpace>(gws, lws)
+    .set_scratch_size(0, Kokkos::PerTeam(REDUCE_BLOCKSIZE_X * sizeof(int) + REDUCE_BLOCKSIZE_X * sizeof(int))), 
+    KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
+      int* sm_val = (int*) memT.team_shmem().get_shmem(COMPUTE_M_BLOCKSIZE_X*sizeof(int));
+      int* sm_ix = (int*) memT.team_shmem().get_shmem(COMPUTE_M_BLOCKSIZE_X*sizeof(int));
+      min_reduce(memT,
+                sm_val,
+                sm_ix,
+                reduce_row,
+                d_indices,
+                reduce_num_elements);
     });
     reduce_num_elements = num_blocks_x;
   }while(reduce_num_elements > 1);
+  Kokkos::fence();
 }
 
 void find_seam(
-    sycl::queue &q,
     int current_w, int w, int h,
     int *d_M,
     int *d_indices,
     int *d_seam )
 {
   //find_seam_kernel<<<1, 1>>>(d_M, d_indices, d_seam, w, h, current_w);
-  q.submit([&] (sycl::handler &cgh) {
-    cgh.single_task<class find_seam>( [=] () {
-      find_seam_kernel(d_M, d_indices, d_seam, w, h, current_w);
-    });
+  Kokkos::parallel_for("find_seam", 
+  Kokkos::RangePolicy<ExecSpace>(0, 1),
+  KOKKOS_LAMBDA(int x){
+    find_seam_kernel(d_M, d_indices, d_seam, w, h, current_w);
   });
+  Kokkos::fence();
 }
 
 void remove_seam(
-    sycl::queue &q,
     int current_w, int w, int h,
     int *d_M,
-    uchar4 *d_pixels,
-    uchar4 *d_pixels_swap,
+    pixel *d_pixels,
+    pixel *d_pixels_swap,
     int *d_seam )
 {
   int num_blocks_x = (current_w-1)/REMOVE_BLOCKSIZE_X + 1;
   int num_blocks_y = (h-1)/REMOVE_BLOCKSIZE_Y + 1;
-  sycl::range<2> lws (REMOVE_BLOCKSIZE_Y, REMOVE_BLOCKSIZE_X);
-  sycl::range<2> gws (REMOVE_BLOCKSIZE_Y * num_blocks_y,
-                      REMOVE_BLOCKSIZE_X * num_blocks_x);
+  size_t lws1 = REMOVE_BLOCKSIZE_Y;
+  size_t lws2 = REMOVE_BLOCKSIZE_X;
+  size_t gws1 = REMOVE_BLOCKSIZE_Y * num_blocks_y;
+  size_t gws2 = REMOVE_BLOCKSIZE_X * num_blocks_x;
 
   //remove_seam_kernel<<<num_blocks, threads_per_block>>>(d_pixels, d_pixels_swap, d_seam, w, h, current_w);
-  q.submit([&] (sycl::handler &cgh) {
-    cgh.parallel_for<class update_seam>(sycl::nd_range<2>(gws, lws), [=] (sycl::nd_item<2> item) {
-      remove_seam_kernel(item,
-                         d_pixels,
-                         d_pixels_swap,
-                         d_seam,
-                         w, h, current_w);
-    });
+  Kokkos::parallel_for("update_seam", 
+  Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>> ({0,0}, {gws1, gws2}, {lws1,lws2}), 
+  KOKKOS_LAMBDA(const int y, const int x){
+    remove_seam_kernel(y, x,
+                        d_pixels,
+                        d_pixels_swap,
+                        d_seam,
+                        w, h, current_w);
   });
+  Kokkos::fence();
 }
 
 void update_costs(
-    sycl::queue &q,
     int current_w, int w, int h,
     int *d_M,
-    uchar4 *d_pixels,
+    pixel *d_pixels,
     short *d_costs_left,
     short *d_costs_up,
     short *d_costs_right,
@@ -279,13 +264,15 @@ void update_costs(
 {
   int num_blocks_x = (current_w-1)/UPDATE_BLOCKSIZE_X + 1;
   int num_blocks_y = (h-1)/UPDATE_BLOCKSIZE_Y + 1;
-  sycl::range<2> lws (UPDATE_BLOCKSIZE_Y, UPDATE_BLOCKSIZE_X);
-  sycl::range<2> gws (UPDATE_BLOCKSIZE_Y * num_blocks_y,
-                      UPDATE_BLOCKSIZE_X * num_blocks_x);
+  size_t lws1 = UPDATE_BLOCKSIZE_Y;
+  size_t lws2 = UPDATE_BLOCKSIZE_X;
+  size_t gws1 = UPDATE_BLOCKSIZE_Y * num_blocks_y;
+  size_t gws2 = UPDATE_BLOCKSIZE_X * num_blocks_x;
 
-  q.submit([&] (sycl::handler &cgh) {
-    cgh.parallel_for<class update_costs>(sycl::nd_range<2>(gws, lws), [=] (sycl::nd_item<2> item) {
-      update_costs_kernel (item,
+  Kokkos::parallel_for("update_costs", 
+  Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>> ({0,0}, {gws1, gws2}, {lws1,lws2}), 
+  KOKKOS_LAMBDA(const int y, const int x){
+      update_costs_kernel (y, x,
                            d_pixels,
                            d_costs_left,
                            d_costs_up,
@@ -295,84 +282,85 @@ void update_costs(
                            d_costs_swap_right,
                            d_seam,
                            w, h, current_w);
-    });
   });
+  Kokkos::fence();
 }
 
 void approx_setup(
-    sycl::queue &q,
     int current_w, int w, int h,
-    uchar4 *d_pixels,
+    pixel *d_pixels,
     int *d_index_map,
     int *d_offset_map,
     int *d_M )
 {
   int num_blocks_x = (current_w-1)/(APPROX_SETUP_BLOCKSIZE_X-4) + 1;
   int num_blocks_y = (h-2)/(APPROX_SETUP_BLOCKSIZE_Y-1) + 1;
-  sycl::range<2> lws (APPROX_SETUP_BLOCKSIZE_Y, APPROX_SETUP_BLOCKSIZE_X);
-  sycl::range<2> gws (num_blocks_y * APPROX_SETUP_BLOCKSIZE_Y,
-                      num_blocks_x * APPROX_SETUP_BLOCKSIZE_X);
+  size_t lws (APPROX_SETUP_BLOCKSIZE_Y*APPROX_SETUP_BLOCKSIZE_X);
+  size_t gws (num_blocks_y * APPROX_SETUP_BLOCKSIZE_Y * num_blocks_x * APPROX_SETUP_BLOCKSIZE_X);
 
-  sycl::range<1> sm_size (APPROX_SETUP_BLOCKSIZE_Y*APPROX_SETUP_BLOCKSIZE_X);
-  q.submit([&] (sycl::handler &cgh) {
-    sycl::local_accessor<pixel, 1> p_sm (sm_size, cgh);
-    sycl::local_accessor<short, 1> l_sm (sm_size, cgh);
-    sycl::local_accessor<short, 1> u_sm (sm_size, cgh);
-    sycl::local_accessor<short, 1> r_sm (sm_size, cgh);
+  const size_t sm_size (APPROX_SETUP_BLOCKSIZE_Y*APPROX_SETUP_BLOCKSIZE_X);
 
-    cgh.parallel_for<class approx_setup>(sycl::nd_range<2>(gws, lws), [=] (sycl::nd_item<2> item) {
-      approx_setup_kernel(item,
-                          p_sm.get_pointer(),
-                          l_sm.get_pointer(),
-                          u_sm.get_pointer(),
-                          r_sm.get_pointer(),
-                          d_pixels,
-                          d_index_map,
-                          d_offset_map,
-                          d_M,
-                          w, h, current_w);
-    });
+  Kokkos::parallel_for("reduce", 
+  Kokkos::TeamPolicy<ExecSpace>(gws, lws)
+  .set_scratch_size(0, Kokkos::PerTeam(sm_size * sizeof(short)*3 + sm_size * sizeof(pixel))), 
+  KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
+    pixel* p_sm = (pixel*) memT.team_shmem().get_shmem(sm_size*sizeof(pixel));
+    short* l_sm = (short*) memT.team_shmem().get_shmem(sm_size*sizeof(short));
+    short* u_sm = (short*) memT.team_shmem().get_shmem(sm_size*sizeof(short));
+    short* r_sm = (short*) memT.team_shmem().get_shmem(sm_size*sizeof(short));
+    approx_setup_kernel(memT,
+                        p_sm,
+                        l_sm,
+                        u_sm,
+                        r_sm,
+                        d_pixels,
+                        d_index_map,
+                        d_offset_map,
+                        d_M,
+                        w, h, current_w);
   });
+  Kokkos::fence();
 }
 
-void approx_M(
-    sycl::queue &q,
-    int current_w, int w, int h,
-    int *d_offset_map,
-    int *d_M )
-{
-  int num_blocks_x = (current_w-1)/APPROX_M_BLOCKSIZE_X + 1;
-  int num_blocks_y = h/2;
-  sycl::range<2> lws (1, APPROX_M_BLOCKSIZE_X);
-  sycl::range<2> gws (h/2, APPROX_M_BLOCKSIZE_X * num_blocks_x);
+void approx_M(int current_w, int w, int h, int *d_offset_map, int *d_M) {
+  //int num_blocks_x = (current_w - 1) / APPROX_M_BLOCKSIZE_X + 1;
+  int num_blocks_y = h / 2;
 
   int step = 1;
-  while(num_blocks_y > 0){
-   // approx_M_kernel<<<num_blocks, threads_per_block>>>(d_offset_map, d_M, w, h, current_w, step);
-    q.submit([&] (sycl::handler &cgh) {
-      cgh.parallel_for<class approx_M>(sycl::nd_range<2>(gws, lws), [=] (sycl::nd_item<2> item) {
-        approx_M_kernel(item,
-                        d_offset_map, d_M,
-                        w, h, current_w, step);
-      });
-    });
+  while (num_blocks_y > 0) {
+    Kokkos::parallel_for("approx_M", Kokkos::TeamPolicy<ExecSpace>(num_blocks_y, Kokkos::AUTO),
+      KOKKOS_LAMBDA(const Kokkos::TeamPolicy<ExecSpace>::member_type& team) {
+        int row = team.league_rank() * 2 * step;
+        int next_row = row + step;
 
-    num_blocks_y = num_blocks_y/2;
-    step = step*2;
+        Kokkos::parallel_for(Kokkos::TeamThreadRange(team, APPROX_M_BLOCKSIZE_X), [=] (const int column) {
+          int ix = row * w + column;
+          
+          if (next_row < h - 1 && column < current_w) {
+            int offset = d_offset_map[ix];
+            d_M[ix] += d_M[offset];
+            d_offset_map[ix] = d_offset_map[offset];
+          }
+        });
+      });
+
+    num_blocks_y = num_blocks_y / 2;
+    step = step * 2;
   }
+  Kokkos::fence();
 }
 
 void approx_seam(
-    sycl::queue &q,
     int w, int h,
     int *d_index_map,
     int *d_indices,
     int *d_seam )
 {
   //approx_seam_kernel<<<1, 1>>>(d_index_map, d_indices, d_seam, w, h);
-  q.submit([&] (sycl::handler &cgh) {
-    cgh.single_task<class approx_seam>( [=] () {
-      approx_seam_kernel(d_index_map, d_indices, d_seam, w, h);
-    });
+  Kokkos::parallel_for("approx_seam", 
+  Kokkos::RangePolicy<ExecSpace>(0, 1),
+  KOKKOS_LAMBDA(int x){
+    approx_seam_kernel(d_index_map, d_indices, d_seam, w, h);
   });
+  Kokkos::fence();
 }

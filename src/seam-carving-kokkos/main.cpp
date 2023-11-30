@@ -6,7 +6,6 @@
 #include <chrono>
 #include <utility>  // std::swap
 #include "utils.h"
-#include "kernels.h"
 #include "kernels_wrapper.h"
 #include <Kokkos_Core.hpp>
 
@@ -16,12 +15,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-template <typename T>
-void swap(Kokkos::View<T*, Layout, MemSpace> a, Kokkos::View<T*, Layout, MemSpace> b, Kokkos::View<T*, Layout, MemSpace> swap){
-  Kokkos::deep_copy(swap, a);
-  Kokkos::deep_copy(a, b);
-  Kokkos::deep_copy(b, swap);
-}
+using host_memory_space = Kokkos::HostSpace::memory_space;
 
 int main(int argc, char **argv) {
   Kokkos::initialize(argc, argv);
@@ -76,31 +70,30 @@ int main(int argc, char **argv) {
   printf("Image loaded. Resizing...\n");
 
   int current_w = w;
-  uchar4 *h_pixels = build_pixels(imgv, w, h);
+  pixel *h_pixels = build_pixels(imgv, w, h);
   const int img_size = w * h;
-  const int img_bytes = img_size * sizeof(uchar4);
   const int w_bytes = w * sizeof(int);
 
   int* indices = (int*)malloc(w_bytes);
   for(int i = 0; i < w; i++) indices[i] = i;
 
-  Kokkos::View<short*, Layout, MemSpace> d_costs_left;
-  Kokkos::View<short*, Layout, MemSpace> d_costs_up;
-  Kokkos::View<short*, Layout, MemSpace> d_costs_right;
+  short* d_costs_left;
+  short* d_costs_up;
+  short* d_costs_right;
 
   if(mode != SEAM_CARVER_APPROX_MODE) {
-    d_costs_left = Kokkos::View<short*, Layout, MemSpace>("d_costs_left", img_size);
-    d_costs_up = Kokkos::View<short*, Layout, MemSpace>("d_costs_up", img_size);
-    d_costs_right = Kokkos::View<short*, Layout, MemSpace>("d_costs_right", img_size);
+    d_costs_left = (short*)Kokkos::kokkos_malloc<MemSpace>(img_size*sizeof(short));
+    d_costs_up = (short*)Kokkos::kokkos_malloc<MemSpace>(img_size*sizeof(short));
+    d_costs_right = (short*)Kokkos::kokkos_malloc<MemSpace>(img_size*sizeof(short));
   }
 
-  Kokkos::View<short*, Layout, MemSpace> d_costs_swap_left;
-  Kokkos::View<short*, Layout, MemSpace> d_costs_swap_up;
-  Kokkos::View<short*, Layout, MemSpace> d_costs_swap_right;
+  short* d_costs_swap_left;
+  short* d_costs_swap_up;
+  short* d_costs_swap_right;
   if(mode == SEAM_CARVER_UPDATE_MODE) {
-    d_costs_swap_left = Kokkos::View<short*, Layout, MemSpace>("d_costs_swap_left", img_size);
-    d_costs_swap_up = Kokkos::View<short*, Layout, MemSpace>("d_costs_swap_up", img_size);
-    d_costs_swap_right = Kokkos::View<short*, Layout, MemSpace>("d_costs_swap_right", img_size);
+    d_costs_swap_left = (short*)Kokkos::kokkos_malloc<MemSpace>(img_size*sizeof(short));
+    d_costs_swap_up = (short*)Kokkos::kokkos_malloc<MemSpace>(img_size*sizeof(short));
+    d_costs_swap_right = (short*)Kokkos::kokkos_malloc<MemSpace>(img_size*sizeof(short));
   }
 
   //sum map in approx mode
@@ -130,15 +123,14 @@ int main(int argc, char **argv) {
 
   Kokkos::View<int*, Layout, MemSpace> d_seam = Kokkos::View<int*, Layout, MemSpace>("d_seam", h);
 
-  Kokkos::View<uchar4*, Layout, MemSpace> d_pixels = Kokkos::View<uchar4*, Layout, MemSpace>("d_pixels", img_size);
-  Kokkos::View<const uchar4*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vh_pixels(h_pixels, img_size);
-  Kokkos::deep_copy(d_pixels, vh_pixels);
+  pixel* d_pixels = (pixel*) Kokkos::kokkos_malloc<MemSpace>(img_size*sizeof(pixel));
+  Kokkos::Impl::DeepCopy<MemSpace, host_memory_space>(d_pixels, h_pixels, img_size * sizeof(pixel));
 
-  Kokkos::View<uchar4*, Layout, MemSpace> d_pixels_swap = Kokkos::View<uchar4*, Layout, MemSpace>("d_pixels_swap", img_size);
-  Kokkos::View<uchar4*, Layout, MemSpace> d_swap = Kokkos::View<uchar4*, Layout, MemSpace>("d_swap", img_size);
+  pixel* d_pixels_swap = (pixel*) Kokkos::kokkos_malloc<MemSpace>(img_size*sizeof(pixel));
+  Kokkos::View<pixel*, Layout, MemSpace> d_swap = Kokkos::View<pixel*, Layout, MemSpace>("d_swap", img_size);
 
   if(mode == SEAM_CARVER_UPDATE_MODE)
-    compute_costs(current_w, w, h, d_pixels.data(), d_costs_left.data(), d_costs_up.data(), d_costs_right.data());
+    compute_costs(current_w, w, h, d_pixels, d_costs_left, d_costs_up, d_costs_right);
 
   int num_iterations = 0;
 
@@ -147,30 +139,30 @@ int main(int argc, char **argv) {
   while(num_iterations < (int)seams_to_remove){
 
     if(mode == SEAM_CARVER_STANDARD_MODE)
-      compute_costs(current_w, w, h, d_pixels.data(), d_costs_left.data(), d_costs_up.data(), d_costs_right.data());
+      compute_costs(current_w, w, h, d_pixels, d_costs_left, d_costs_up, d_costs_right);
 
     if(mode != SEAM_CARVER_APPROX_MODE){
-      compute_M(current_w, w, h, d_M.data(), d_costs_left.data(), d_costs_up.data(), d_costs_right.data());
+      compute_M(current_w, w, h, d_M.data(), d_costs_left, d_costs_up, d_costs_right);
       find_min_index(current_w, d_indices_ref.data(), d_indices.data(), reduce_row.data());
       find_seam(current_w, w, h, d_M.data(), d_indices.data(), d_seam.data());
     }
     else{
-      approx_setup(current_w, w, h, d_pixels.data(), d_index_map.data(), d_offset_map.data(), d_M.data());
+      approx_setup(current_w, w, h, d_pixels, d_index_map.data(), d_offset_map.data(), d_M.data());
       approx_M(current_w, w, h, d_offset_map.data(),  d_M.data());
       find_min_index(current_w, d_indices_ref.data(), d_indices.data(), reduce_row.data());
       approx_seam(w, h, d_index_map.data(), d_indices.data(), d_seam.data());
     }
 
-    remove_seam(current_w, w, h, d_M.data(), d_pixels.data(), d_pixels_swap.data(), d_seam.data());
-    std::swap(d_pixels.data(), d_pixels_swap.data());
+    remove_seam(current_w, w, h, d_M.data(), d_pixels, d_pixels_swap, d_seam.data());
+    std::swap(d_pixels, d_pixels_swap);
 
     if(mode == SEAM_CARVER_UPDATE_MODE){
-      update_costs(current_w, w, h, d_M.data(), d_pixels.data(),
-                   d_costs_left.data(), d_costs_up.data(), d_costs_right.data(),
-                   d_costs_swap_left.data(), d_costs_swap_up.data(), d_costs_swap_right.data(), d_seam.data() );
-      std::swap(d_costs_left.data(), d_costs_swap_left.data());
-      std::swap(d_costs_up.data(), d_costs_swap_up.data());
-      std::swap(d_costs_right.data(), d_costs_swap_right.data());
+      update_costs(current_w, w, h, d_M.data(), d_pixels,
+                   d_costs_left, d_costs_up, d_costs_right,
+                   d_costs_swap_left, d_costs_swap_up, d_costs_swap_right, d_seam.data() );
+      std::swap(d_costs_left, d_costs_swap_left);
+      std::swap(d_costs_up, d_costs_swap_up);
+      std::swap(d_costs_right, d_costs_swap_right);
     }
 
     current_w--;
@@ -182,7 +174,7 @@ int main(int argc, char **argv) {
   float time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
   printf("Execution time of seam carver kernels: %f (ms)\n", time * 1e-6f);
 
-  Kokkos::deep_copy(vh_pixels, d_pixels);
+  Kokkos::Impl::DeepCopy<host_memory_space, MemSpace>(h_pixels, d_pixels, img_size * sizeof(pixel));
   Kokkos::fence();
   unsigned char* output = flatten_pixels(h_pixels, w, h, current_w);
   printf("Image resized\n");
@@ -193,6 +185,18 @@ int main(int argc, char **argv) {
   free(h_pixels);
   free(output);
   free(indices);
+  Kokkos::kokkos_free(d_pixels);
+  Kokkos::kokkos_free(d_pixels_swap);
+  if(mode != SEAM_CARVER_APPROX_MODE) {
+    Kokkos::kokkos_free(d_costs_left);
+    Kokkos::kokkos_free(d_costs_up);
+    Kokkos::kokkos_free(d_costs_right);
+  }
+  if(mode != SEAM_CARVER_UPDATE_MODE) {
+    Kokkos::kokkos_free(d_costs_swap_left);
+    Kokkos::kokkos_free(d_costs_swap_up);
+    Kokkos::kokkos_free(d_costs_swap_right);
+  }
   }
   Kokkos::finalize();
   return 0;
