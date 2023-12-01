@@ -1,3 +1,11 @@
+typedef struct pixel
+{
+  unsigned char x;
+  unsigned char y;
+  unsigned char z;
+  unsigned char w;
+};
+
 unsigned int edgeTable[256]
 {
   0x0  , 0x109, 0x203, 0x30a, 0x406, 0x50f, 0x605, 0x70c,
@@ -331,6 +339,22 @@ int triTable[256*16]
 };
 
 uchar4 edgeIDTable[12]
+{
+  {0, 0, 0, 0},
+  {1, 0, 0, 1},
+  {0, 1, 0, 0},
+  {0, 0, 0, 1},
+  {0, 0, 1, 0},
+  {1, 0, 1, 1},
+  {0, 1, 1, 0},
+  {0, 0, 1, 1},
+  {0, 0, 0, 2},
+  {1, 0, 0, 2},
+  {1, 1, 0, 2},
+  {0, 1, 0, 2}
+};
+
+pixel edgeIDTableP[12]
 {
   {0, 0, 0, 0},
   {1, 0, 0, 1},

@@ -6,7 +6,6 @@
 #include <random>
 #include <chrono>
 #include <Kokkos_Core.hpp>
-
 #include "tables.h"
 
 #if defined(INTEL_GPU)
@@ -21,6 +20,8 @@ typedef Kokkos::HostSpace MemSpace;
 #endif
 
 typedef Kokkos::LayoutRight Layout;
+
+using host_memory = Kokkos::HostSpace::memory_space;
 
 // problem size
 constexpr unsigned int N(1024);
@@ -48,7 +49,15 @@ constexpr unsigned int gridXLv2(gridXLv1* blockXLv2);
 constexpr unsigned int gridYLv2(gridYLv1* blockYLv2);
 //constexpr unsigned int gridZLv2(gridZLv1* blockZLv2);
 
-KOKKOS_INLINE_FUNCTION float f(unsigned int x, unsigned int y, unsigned int z)
+template <typename T>
+KOKKOS_INLINE_FUNCTION inline T atomicAdd(T *var, T val)
+{
+  T old = var;
+  Kokkos::atomic_add(*var, val);
+  return old;
+}
+
+KOKKOS_INLINE_FUNCTION inline float f(unsigned int x, unsigned int y, unsigned int z)
 {
   constexpr float d(2.0f / N);
   float xf((int(x - Nd2)) * d);//[-1, 1)
@@ -57,49 +66,42 @@ KOKKOS_INLINE_FUNCTION float f(unsigned int x, unsigned int y, unsigned int z)
   return 1.f - 16.f * xf * yf * zf - 4.f * (xf * xf + yf * yf + zf * zf);
 }
 
-KOKKOS_INLINE_FUNCTION float zeroPoint(unsigned int x, float v0, float v1, float isoValue)
+KOKKOS_INLINE_FUNCTION inline float zeroPoint(unsigned int x, float v0, float v1, float isoValue)
 {
   return ((x * (v1 - isoValue) + (x + 1) * (isoValue - v0)) / (v1 - v0) - Nd2) * (2.0f / N);
 }
 
-KOKKOS_INLINE_FUNCTION float transformToCoord(unsigned int x)
+KOKKOS_INLINE_FUNCTION inline float transformToCoord(unsigned int x)
 {
   return (int(x) - int(Nd2)) * (2.0f / N);
 }
 
-void computeMinMaxLv1(Kokkos::View<float*, Layout, MemSpace>* minMax)
+void computeMinMaxLv1(float*__restrict minMax)
 {
-  const int lSize = voxelYLv1 * voxelXLv1;
-  const int gSize = (gridZLv1 * gridYLv1 * gridXLv1) * lSize;
-  
+  size_t lws = 1 * voxelYLv1 * voxelXLv1;
+  size_t gws = gridZLv1 * gridYLv1 * gridXLv1;
   Kokkos::parallel_for("min_max1", 
-  Kokkos::TeamPolicy<ExecSpace>(gSize, lSize)
+  Kokkos::TeamPolicy<ExecSpace>(gws*lws, lws)
   .set_scratch_size(0, Kokkos::PerTeam(64*sizeof(float))), 
   KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
+    float* sminMax = (float*) memT.team_shmem().get_shmem(64*sizeof(float));
     constexpr unsigned int threadNum(voxelXLv1 * voxelYLv1);
     constexpr unsigned int warpNum(threadNum / 32);
-
-    int blockIdx_z = team.league_rank() / (gridXLv1 * gridYLv1);
-    int blockIdx_y = (team.league_rank() % (gridXLv1 * gridYLv1)) / gridXLv1;
-    int blockIdx_x = team.league_rank() % gridXLv1;
-
-    int threadIdx_z = team.team_rank() / (voxelYLv1 * voxelXLv1);
-    int threadIdx_y = (team.team_rank() % (voxelYLv1 * voxelXLv1)) / voxelXLv1;
-    int threadIdx_x = team.team_rank() % voxelXLv1;
-    int tid(threadIdx_x + voxelXLv1 * threadIdx_y);
-    unsigned int laneid = tid % 32;
-
+    int blockIdx_z = memT.league_rank() / (gridYLv1 * gridXLv1);
+    int blockIdx_y = (memT.league_rank() % (gridYLv1 * gridXLv1)) / gridXLv1;
+    int blockIdx_x = memT.league_rank() % gridXLv1;
+    int threadIdx_z = memT.team_rank() / (voxelYLv1 * voxelXLv1);
+    int threadIdx_y = (memT.team_rank() % (voxelYLv1 * voxelXLv1)) / voxelXLv1;
+    int threadIdx_x = memT.team_rank() % voxelXLv1;
     unsigned int x(blockIdx_x * (voxelXLv1 - 1) + threadIdx_x);
     unsigned int y(blockIdx_y * (voxelYLv1 - 1) + threadIdx_y);
     unsigned int z(blockIdx_z * (voxelZLv1 - 1));
-    
-    
+    unsigned int tid(threadIdx_x + voxelXLv1 * threadIdx_y);
+    unsigned int laneid = tid % 32;
     unsigned int blockid(blockIdx_x + gridXLv1 * (blockIdx_y + gridYLv1 * blockIdx_z));
     unsigned int warpid(tid >> 5);
     float v(f(x, y, z));
     float minV(v), maxV(v);
-    float* sminMax = (float*) memT.team_shmem().get_shmem(64*sizeof(float));
-
     for (int c0(1); c0 < voxelZLv1; ++c0)
     {
       v = f(x, y, z + c0);
@@ -145,25 +147,23 @@ void computeMinMaxLv1(Kokkos::View<float*, Layout, MemSpace>* minMax)
 
 void compactLv1(
   float isoValue,
-  const Kokkos::View<float*, Layout, MemSpace>* minMax,
-  Kokkos::View<unsigned int*, Layout, MemSpace>* blockIndices,
-  Kokkos::View<unsigned int*, Layout, MemSpace>* countedBlockNum)
+  const float*__restrict minMax,
+  unsigned int*__restrict blockIndices,
+  unsigned int*__restrict countedBlockNum)
 {
-  const int gSize = countingBlockNumLv1*countingThreadNumLv1;
-  const int lSize = countingThreadNumLv1;
-
+  constexpr size_t lws = countingThreadNumLv1;
+  constexpr size_t gws = countingBlockNumLv1;
   Kokkos::parallel_for("compact1", 
-  Kokkos::TeamPolicy<ExecSpace>(gSize, lSize)
+  Kokkos::TeamPolicy<ExecSpace>(gws*lws, lws)
   .set_scratch_size(0, Kokkos::PerTeam(32*sizeof(unsigned int))), 
   KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
+    unsigned int* sums = (unsigned int*) memT.team_shmem().get_shmem(32*sizeof(unsigned int));
     constexpr unsigned int warpNum(countingThreadNumLv1 / 32);
     unsigned int tid(memT.team_rank());
     unsigned int laneid = tid % 32;
     unsigned int bIdx(memT.league_rank() * countingThreadNumLv1 + tid);
     unsigned int warpid(tid >> 5);
     unsigned int test;
-    unsigned int* sums = (unsigned int*) memT.team_shmem().get_shmem(32*sizeof(unsigned int));
-
     if (minMax[2 * bIdx] <= isoValue && minMax[2 * bIdx + 1] >= isoValue)test = 1;
     else test = 0;
     unsigned int testSum(test);
@@ -189,26 +189,25 @@ void compactLv1(
     memT.team_barrier();
     if (warpid != 0)testSum += sums[warpid - 1];
     if (tid == countingThreadNumLv1 - 1 && testSum != 0) {
-      Kokkos::atomic_add(&countedBlockNum[0], testSum);
-      sums[31] = testSum;
+      sums[31] = atomicAdd(countedBlockNum, testSum);
     }
     memT.team_barrier();
     if (test) blockIndices[testSum + sums[31] - 1] = bIdx;
   });
 }
 
-void computeMinMaxLv2(const Kokkos::View<unsigned int*, Layout, MemSpace>* blockIndicesLv1, 
-Kokkos::View<float*, Layout, MemSpace>* minMax)
+void computeMinMaxLv2(
+  const unsigned int*__restrict blockIndicesLv1,
+  float*__restrict minMax)
 {
-  const int lSize = blockXLv2 * blockYLv2 * voxelXLv2 * voxelYLv2;
-  const int gSize = countedBlockNumLv1*lSize;
-
+  constexpr size_t lws = (blockXLv2 * blockYLv2) * (voxelXLv2 * voxelYLv2);
+  constexpr size_t gws = countedBlockNumLv1;
   Kokkos::parallel_for("min_max2", 
-  Kokkos::TeamPolicy<ExecSpace>(gSize, lSize), 
+  Kokkos::TeamPolicy<ExecSpace>(gws*lws, lws), 
   KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
     unsigned int tid(memT.team_rank() % (voxelXLv2 * voxelYLv2));
-    unsigned int voxelOffset((memT.team_rank() % lSize) / voxelXLv2 * voxelYLv2);
-    unsigned int blockIdx_x = memT.league_rank() / countedBlockNumLv1;
+    unsigned int voxelOffset(memT.team_rank() / (voxelXLv2 * voxelYLv2));
+    unsigned int blockIdx_x = memT.league_rank() % countedBlockNumLv1;
     unsigned int blockIndex(blockIndicesLv1[blockIdx_x]);
     unsigned int tp(blockIndex);
     unsigned int x((blockIndex % gridXLv1) * (voxelXLv1 - 1) + (voxelOffset % 5) * (voxelXLv2 - 1) + (tid & 3));
@@ -252,18 +251,19 @@ Kokkos::View<float*, Layout, MemSpace>* minMax)
 
 void compactLv2(
   float isoValue,
-  const Kokkos::View<float*, Layout, MemSpace>* minMax,
-  const Kokkos::View<unsigned int*, Layout, MemSpace>* blockIndicesLv1,
-  Kokkos::View<unsigned int*, Layout, MemSpace>* blockIndicesLv2,
+  const float*__restrict minMax,
+  const unsigned int*__restrict blockIndicesLv1,
+  unsigned int*__restrict blockIndicesLv2,
   unsigned int counterBlockNumLv1,
-  Kokkos::View<unsigned int*, Layout, MemSpace>* countedBlockNumLv2)
+  unsigned int*__restrict countedBlockNumLv2)
 {
-  unsigned int countingBlockNumLv2((countedBlockNumLv1 * voxelNumLv2 + countingThreadNumLv2 - 1) / countingThreadNumLv2);
-
+  constexpr size_t lws = countingThreadNumLv2;
+  constexpr size_t gws = countingBlockNumLv2;
   Kokkos::parallel_for("compact2", 
-  Kokkos::TeamPolicy<ExecSpace>(countingBlockNumLv2*countingThreadNumLv2, countingThreadNumLv2)
+  Kokkos::TeamPolicy<ExecSpace>(gws*lws, lws)
   .set_scratch_size(0, Kokkos::PerTeam(32*sizeof(unsigned int))), 
   KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
+    unsigned int* sums = (unsigned int*) memT.team_shmem().get_shmem(32*sizeof(unsigned int));
     constexpr unsigned int warpNum(countingThreadNumLv2 / 32);
     unsigned int tid(memT.team_rank());
     unsigned int laneid = tid % 32;
@@ -271,8 +271,6 @@ void compactLv2(
     unsigned int id0(tid + memT.league_rank() * countingThreadNumLv2);
     unsigned int id1(id0 / voxelNumLv2);
     unsigned int test;
-    unsigned int* sums = (unsigned int*) memT.team_shmem().get_shmem(32*sizeof(unsigned int));
-
     if (id1 < counterBlockNumLv1)
     {
       if (minMax[2 * id0] <= isoValue && minMax[2 * id0 + 1] >= isoValue)
@@ -304,8 +302,7 @@ void compactLv2(
     memT.team_barrier();
     if (warpid != 0) testSum += sums[warpid - 1];
     if (tid == countingThreadNumLv2 - 1) {
-      Kokkos::atomic_add(&countedBlockNumLv2[0], testSum);
-      sums[31] = testSum;
+      sums[31] = atomicAdd(countedBlockNumLv2, testSum);
     }
     memT.team_barrier();
 
@@ -344,32 +341,31 @@ int main(int argc, char* argv[])
   std::uniform_real_distribution<float>rd(0, 1);
   std::mt19937 mt(123);
 
-  Kokkos::View<float*, Layout, MemSpace> minMaxLv1Device = Kokkos::View<float*, Layout, MemSpace>("minMaxLv1Device", blockNum*2);
-  Kokkos::View<unsigned int*, Layout, MemSpace> blockIndicesLv1Device = Kokkos::View<unsigned int*, Layout, MemSpace>("blockIndicesLv1Device", blockNum);
-  Kokkos::View<unsigned int*, Layout, MemSpace> countedBlockNumLv1Device = Kokkos::View<unsigned int*, Layout, MemSpace>("countedBlockNumLv1Device", 1);
-  Kokkos::View<unsigned int*, Layout, MemSpace> countedBlockNumLv2Device = Kokkos::View<unsigned int*, Layout, MemSpace>("countedBlockNumLv2Device", 1);
+  float *minMaxLv1Device = (float*)Kokkos::kokkos_malloc<MemSpace>(blockNum * 2*sizeof(float));
+  unsigned int *blockIndicesLv1Device = (unsigned int*)Kokkos::kokkos_malloc<MemSpace>(blockNum*sizeof(unsigned int));
+  unsigned int *countedBlockNumLv1Device = (unsigned int*)Kokkos::kokkos_malloc<MemSpace>(1*sizeof(unsigned int));
+  unsigned int *countedBlockNumLv2Device = (unsigned int*)Kokkos::kokkos_malloc<MemSpace>(1*sizeof(unsigned int));
 
-  Kokkos::View<unsigned short*, Layout, MemSpace> distinctEdgesTableDevice = Kokkos::View<unsigned short*, Layout, MemSpace>("distinctEdgesTableDevice", 256);
-  Kokkos::View<const unsigned short*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vdistinctEdgesTable(distinctEdgesTable, 256);
-  Kokkos::deep_copy(distinctEdgesTableDevice, vdistinctEdgesTable);
+  unsigned short *distinctEdgesTableDevice = (unsigned short*)Kokkos::kokkos_malloc<MemSpace>(256*sizeof(unsigned short));
+  Kokkos::Impl::DeepCopy<MemSpace, host_memory>(distinctEdgesTableDevice, distinctEdgesTable, 256*sizeof(unsigned short));
 
-  Kokkos::View<int*, Layout, MemSpace> triTableDevice = Kokkos::View<int*, Layout, MemSpace>("triTableDevice", 256*16);
-  Kokkos::View<const int*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vtriTable(triTable, 256*16);
-  Kokkos::deep_copy(triTableDevice, vtriTable);
+  int *triTableDevice = (int*)Kokkos::kokkos_malloc<MemSpace>(256*16*sizeof(int));
+  Kokkos::Impl::DeepCopy<MemSpace, host_memory>(triTableDevice, triTable, 256*16*sizeof(int));
 
-  Kokkos::View<uchar4*, Layout, MemSpace> edgeIDTableDevice = Kokkos::View<uchar4*, Layout, MemSpace>("edgeIDTableDevice", 12);
-  Kokkos::View<const uchar4*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vedgeIDTable(edgeIDTable, 12);
-  Kokkos::deep_copy(edgeIDTableDevice, vedgeIDTable);
+  pixel* edgeIDTableDevice = (pixel*)Kokkos::kokkos_malloc<MemSpace>(12*sizeof(pixel));
+  Kokkos::Impl::DeepCopy<MemSpace, host_memory>(edgeIDTableDevice, edgeIDTableP, 12*sizeof(pixel));
 
-  Kokkos::View<unsigned int*, Layout, MemSpace> countedVerticesNumDevice = Kokkos::View<unsigned int*, Layout, MemSpace>("countedVerticesNumDevice", 1);
-  Kokkos::View<unsigned int*, Layout, MemSpace> countedTrianglesNumDevice = Kokkos::View<unsigned int*, Layout, MemSpace>("countedTrianglesNumDevice", 1);
+  unsigned int *countedVerticesNumDevice = (unsigned int*)Kokkos::kokkos_malloc<MemSpace>(sizeof(unsigned int));
+  unsigned int *countedTrianglesNumDevice = (unsigned int*)Kokkos::kokkos_malloc<MemSpace>(sizeof(unsigned int));
 
   // simulate rendering without memory allocation for vertices and triangles
-  Kokkos::View<unsigned long long*, Layout, MemSpace> trianglesDevice = Kokkos::View<unsigned long long*, Layout, MemSpace>("trianglesDevice", 1);
-  Kokkos::View<float*, Layout, MemSpace> coordXDevice = Kokkos::View<float*, Layout, MemSpace>("coordXDevice", 1);
-  Kokkos::View<float*, Layout, MemSpace> coordYDevice = Kokkos::View<float*, Layout, MemSpace>("coordYDevice", 1);
-  Kokkos::View<float*, Layout, MemSpace> coordZDevice = Kokkos::View<float*, Layout, MemSpace>("coordZDevice", 1);
-  Kokkos::View<float*, Layout, MemSpace> coordZPDevice = Kokkos::View<float*, Layout, MemSpace>("coordZPDevice", 1);
+  unsigned long long *trianglesDevice = (unsigned long long*)Kokkos::kokkos_malloc<MemSpace>(sizeof(unsigned long long));
+  float *coordXDevice = (float*)Kokkos::kokkos_malloc<MemSpace>(sizeof(float));
+  float *coordYDevice = (float*)Kokkos::kokkos_malloc<MemSpace>(sizeof(float));
+  float *coordZDevice = (float*)Kokkos::kokkos_malloc<MemSpace>(sizeof(float));
+  float *coordZPDevice = (float*)Kokkos::kokkos_malloc<MemSpace>(sizeof(float));
+
+  constexpr size_t BlockSizeGenerating = voxelZLv2*voxelYLv2*voxelXLv2;
 
   float isoValue(-0.9f);
 
@@ -378,209 +374,210 @@ int main(int argc, char* argv[])
   unsigned int countedVerticesNum;
   unsigned int countedTrianglesNum;
 
-  Kokkos::View<unsigned int*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vcountedBlockNumLv1(&countedBlockNumLv1, 1);
-  Kokkos::View<unsigned int*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vcountedBlockNumLv2(&countedBlockNumLv2, 1);
-  Kokkos::View<unsigned int*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vcountedVerticesNum(&countedVerticesNum, 1);
-  Kokkos::View<unsigned int*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vcountedTrianglesNum(&countedTrianglesNum, 1);
-
   float time(0.f);
 
   for (unsigned int c0(0); c0 < repeat; ++c0)
   {
     Kokkos::fence();
 
-    Kokkos::deep_copy(countedBlockNumLv1Device, 0);
-    Kokkos::deep_copy(countedBlockNumLv2Device, 0);
-    Kokkos::deep_copy(countedVerticesNumDevice, 0);
-    Kokkos::deep_copy(countedTrianglesNumDevice, 0);
-    Kokkos::deep_copy(trianglesDevice, 0);
-    Kokkos::deep_copy(coordXDevice, 0.f);
-    Kokkos::deep_copy(coordYDevice, 0.f);
-    Kokkos::deep_copy(coordZDevice, 0.f);
-    Kokkos::deep_copy(coordZPDevice, 0.f);
+    Kokkos::Impl::DeepCopy<MemSpace, host_memory>(countedBlockNumLv1Device, 0, sizeof(unsigned int));
+    Kokkos::Impl::DeepCopy<MemSpace, host_memory>(countedBlockNumLv2Device, 0, sizeof(unsigned int));
+    Kokkos::Impl::DeepCopy<MemSpace, host_memory>(countedVerticesNumDevice, 0, sizeof(unsigned int));
+    Kokkos::Impl::DeepCopy<MemSpace, host_memory>(countedTrianglesNumDevice, 0, sizeof(unsigned int));
+    Kokkos::Impl::DeepCopy<MemSpace, host_memory>(trianglesDevice, 0, sizeof(unsigned long long));
+    Kokkos::Impl::DeepCopy<MemSpace, host_memory>(coordXDevice, 0, sizeof(float));
+    Kokkos::Impl::DeepCopy<MemSpace, host_memory>(coordYDevice, 0, sizeof(float));
+    Kokkos::Impl::DeepCopy<MemSpace, host_memory>(coordZDevice, 0, sizeof(float));
+    Kokkos::Impl::DeepCopy<MemSpace, host_memory>(coordZPDevice, 0, sizeof(float));
 
-    computeMinMaxLv1(&minMaxLv1Device);
+    computeMinMaxLv1(minMaxLv1Device);
 
-    compactLv1(isoValue, &minMaxLv1Device, &blockIndicesLv1Device, &countedBlockNumLv1Device);
-    Kokkos::deep_copy(vcountedBlockNumLv1, countedBlockNumLv1Device);
+    compactLv1(isoValue, minMaxLv1Device, blockIndicesLv1Device, countedBlockNumLv1Device);
 
-    Kokkos::View<float*, Layout, MemSpace> minMaxLv2Device = Kokkos::View<float*, Layout, MemSpace>("minMaxLv2Device", countedBlockNumLv1 * voxelNumLv2 * 2);
-    computeMinMaxLv2(&blockIndicesLv1Device, &minMaxLv2Device);
+    Kokkos::Impl::DeepCopy<host_memory, MemSpace>(&countedBlockNumLv1, countedBlockNumLv1Device, sizeof(unsigned int));
 
-    Kokkos::View<unsigned int*, Layout, MemSpace> blockIndicesLv2Device = Kokkos::View<unsigned int*, Layout, MemSpace>("blockIndicesLv2Device", countedBlockNumLv1 * voxelNumLv2);
+    float* minMaxLv2Device = (float*)Kokkos::kokkos_malloc<MemSpace>(countedBlockNumLv1 * voxelNumLv2 * 2*sizeof(float));
+
+    computeMinMaxLv2(blockIndicesLv1Device, minMaxLv2Device);
+
+    unsigned int *blockIndicesLv2Device = (unsigned int*)Kokkos::kokkos_malloc<MemSpace>(countedBlockNumLv1 * voxelNumLv2*sizeof(unsigned int));
+    unsigned int countingBlockNumLv2((countedBlockNumLv1 * voxelNumLv2 + countingThreadNumLv2 - 1) / countingThreadNumLv2);
+
     compactLv2(isoValue, minMaxLv2Device, blockIndicesLv1Device, blockIndicesLv2Device, countedBlockNumLv1, countedBlockNumLv2Device);
-    Kokkos::deep_copy(vcountedBlockNumLv2, countedBlockNumLv2Device);
+
+    Kokkos::Impl::DeepCopy<host_memory, MemSpace>(&countedBlockNumLv2, countedBlockNumLv2Device, sizeof(unsigned int));
+    Kokkos::fence();
 
     auto start = std::chrono::steady_clock::now();
 
-    q.submit([&] (sycl::handler &cgh) {
-      sycl::local_accessor<unsigned short, 3> vertexIndices(sycl::range<3>{voxelZLv2, voxelYLv2, voxelXLv2}, cgh);
-      sycl::local_accessor<float, 3> value(sycl::range<3>{voxelZLv2+1, voxelYLv2+1, voxelXLv2+1}, cgh);
-      sycl::local_accessor<unsigned int, 1> sumsVertices(sycl::range<1>(32), cgh);
-      sycl::local_accessor<unsigned int, 1> sumsTriangles(sycl::range<1>(32), cgh);
+    Kokkos::parallel_for("triangles_gen", 
+    Kokkos::TeamPolicy<ExecSpace>(countedBlockNumLv2*BlockSizeGenerating, BlockSizeGenerating)
+    .set_scratch_size(0, Kokkos::PerTeam((voxelZLv2*voxelYLv2*voxelXLv2)*sizeof(unsigned short) + ((voxelZLv2+1)(voxelYLv2+1)*(voxelXLv2+1))*sizeof(float) + 32*sizeof(unsigned int) + 32*sizeof(unsigned int))), 
+    KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
+      unsigned short* vertexIndices = (unsigned short*) memT.team_shmem().get_shmem((voxelZLv2*voxelYLv2*voxelXLv2)*sizeof(unsigned short));
+      float* value = (float*) memT.team_shmem().get_shmem(((voxelZLv2+1)(voxelYLv2+1)*(voxelXLv2+1))*sizeof(float));
+      unsigned int* sumsVertices = (unsigned int*) memT.team_shmem().get_shmem(32*sizeof(unsigned int));
+      unsigned int* sumsTriangles = (unsigned int*) memT.team_shmem().get_shmem(32*sizeof(unsigned int));
+      unsigned int threadIdx_x = memT.team_rank() % voxelXLv2;
+      unsigned int threadIdx_y = (memT.team_rank() % (voxelYLv2*voxelXLv2)) / voxelXLv2;
+      unsigned int threadIdx_z = memT.team_rank() / (voxelYLv2*voxelXLv2);
 
-      const sycl::range<3> trianglesBlock (1,1,countedBlockNumLv2);
-      cgh.parallel_for<class triangles_gen>(
-        sycl::nd_range<3>(trianglesBlock*BlockSizeGenerating, BlockSizeGenerating), [=] (sycl::nd_item<3> item) {
-        auto sg = item.get_sub_group();
-        unsigned int threadIdx_x = item.get_local_id(2);
-        unsigned int threadIdx_y = item.get_local_id(1);
-        unsigned int threadIdx_z = item.get_local_id(0);
-
-        unsigned int blockId(blockIndicesLv2Device[item.get_group(2)]);
-        unsigned int tp(blockId);
-        unsigned int x((tp % gridXLv2) * (voxelXLv2 - 1) + threadIdx_x);
-        tp /= gridXLv2;
-        unsigned int y((tp % gridYLv2) * (voxelYLv2 - 1) + threadIdx_y);
-        unsigned int z((tp / gridYLv2) * (voxelZLv2 - 1) + threadIdx_z);
-        unsigned int eds(7);
-        float v(value[threadIdx_z][threadIdx_y][threadIdx_x] = f(x, y, z));
-        if (threadIdx_x == voxelXLv2 - 1)
-        {
-          eds &= 6;
-          value[threadIdx_z][threadIdx_y][voxelXLv2] = f(x + 1, y, z);
-          if (threadIdx_y == voxelYLv2 - 1)
-            value[threadIdx_z][voxelYLv2][voxelXLv2] = f(x + 1, y + 1, z);
-        }
+      unsigned int blockId(blockIndicesLv2Device[memT.league_rank()]);
+      unsigned int tp(blockId);
+      unsigned int x((tp % gridXLv2) * (voxelXLv2 - 1) + threadIdx_x);
+      tp /= gridXLv2;
+      unsigned int y((tp % gridYLv2) * (voxelYLv2 - 1) + threadIdx_y);
+      unsigned int z((tp / gridYLv2) * (voxelZLv2 - 1) + threadIdx_z);
+      unsigned int eds(7);
+      float v(value[threadIdx_z][threadIdx_y][threadIdx_x] = f(x, y, z));
+      if (threadIdx_x == voxelXLv2 - 1)
+      {
+        eds &= 6;
+        value[threadIdx_z][threadIdx_y][voxelXLv2] = f(x + 1, y, z);
         if (threadIdx_y == voxelYLv2 - 1)
-        {
-          eds &= 5;
-          value[threadIdx_z][voxelYLv2][threadIdx_x] = f(x, y + 1, z);
-          if (threadIdx_z == voxelZLv2 - 1)
-            value[voxelZLv2][voxelYLv2][threadIdx_x] = f(x, y + 1, z + 1);
-        }
+          value[threadIdx_z][voxelYLv2][voxelXLv2] = f(x + 1, y + 1, z);
+      }
+      if (threadIdx_y == voxelYLv2 - 1)
+      {
+        eds &= 5;
+        value[threadIdx_z][voxelYLv2][threadIdx_x] = f(x, y + 1, z);
         if (threadIdx_z == voxelZLv2 - 1)
+          value[voxelZLv2][voxelYLv2][threadIdx_x] = f(x, y + 1, z + 1);
+      }
+      if (threadIdx_z == voxelZLv2 - 1)
+      {
+        eds &= 3;
+        value[voxelZLv2][threadIdx_y][threadIdx_x] = f(x, y, z + 1);
+        if (threadIdx_x == voxelXLv2 - 1)
+          value[voxelZLv2][threadIdx_y][voxelXLv2] = f(x + 1, y, z + 1);
+      }
+      eds <<= 13;
+      memT.team_barrier();
+      unsigned int cubeCase(0);
+      if (value[threadIdx_z][threadIdx_y][threadIdx_x] < isoValue) cubeCase |= 1;
+      if (value[threadIdx_z][threadIdx_y][threadIdx_x + 1] < isoValue) cubeCase |= 2;
+      if (value[threadIdx_z][threadIdx_y + 1][threadIdx_x + 1] < isoValue) cubeCase |= 4;
+      if (value[threadIdx_z][threadIdx_y + 1][threadIdx_x] < isoValue) cubeCase |= 8;
+      if (value[threadIdx_z + 1][threadIdx_y][threadIdx_x] < isoValue) cubeCase |= 16;
+      if (value[threadIdx_z + 1][threadIdx_y][threadIdx_x + 1] < isoValue) cubeCase |= 32;
+      if (value[threadIdx_z + 1][threadIdx_y + 1][threadIdx_x + 1] < isoValue) cubeCase |= 64;
+      if (value[threadIdx_z + 1][threadIdx_y + 1][threadIdx_x] < isoValue) cubeCase |= 128;
+
+      unsigned int distinctEdges(eds ? distinctEdgesTableDevice[cubeCase] : 0);
+      unsigned int numTriangles(eds != 0xe000 ? 0 : distinctEdges & 7);
+      unsigned int numVertices(Kokkos::popcount(distinctEdges &= eds));
+      unsigned int laneid = (threadIdx_x + voxelXLv2 * (threadIdx_y + voxelYLv2 * threadIdx_z)) % 32;
+      unsigned warpid((threadIdx_x + voxelXLv2 * (threadIdx_y + voxelYLv2 * threadIdx_z)) >> 5);
+      constexpr unsigned int threadNum(voxelXLv2 * voxelYLv2 * voxelZLv2);
+      constexpr unsigned int warpNum(threadNum / 32);
+      unsigned int sumVertices(numVertices);
+      unsigned int sumTriangles(numTriangles);
+
+      #pragma unroll
+      for (int c0(1); c0 < 32; c0 *= 2)
+      {
+        unsigned int tp0(Kokkos::shfl_up(memT, sumVertices, c0));
+        unsigned int tp1(Kokkos::shfl_up(memT, sumTriangles, c0));
+        if (laneid >= c0)
         {
-          eds &= 3;
-          value[voxelZLv2][threadIdx_y][threadIdx_x] = f(x, y, z + 1);
-          if (threadIdx_x == voxelXLv2 - 1)
-            value[voxelZLv2][threadIdx_y][voxelXLv2] = f(x + 1, y, z + 1);
+          sumVertices += tp0;
+          sumTriangles += tp1;
         }
-        eds <<= 13;
-        item.barrier(sycl::access::fence_space::local_space);
-        unsigned int cubeCase(0);
-        if (value[threadIdx_z][threadIdx_y][threadIdx_x] < isoValue) cubeCase |= 1;
-        if (value[threadIdx_z][threadIdx_y][threadIdx_x + 1] < isoValue) cubeCase |= 2;
-        if (value[threadIdx_z][threadIdx_y + 1][threadIdx_x + 1] < isoValue) cubeCase |= 4;
-        if (value[threadIdx_z][threadIdx_y + 1][threadIdx_x] < isoValue) cubeCase |= 8;
-        if (value[threadIdx_z + 1][threadIdx_y][threadIdx_x] < isoValue) cubeCase |= 16;
-        if (value[threadIdx_z + 1][threadIdx_y][threadIdx_x + 1] < isoValue) cubeCase |= 32;
-        if (value[threadIdx_z + 1][threadIdx_y + 1][threadIdx_x + 1] < isoValue) cubeCase |= 64;
-        if (value[threadIdx_z + 1][threadIdx_y + 1][threadIdx_x] < isoValue) cubeCase |= 128;
-
-        unsigned int distinctEdges(eds ? distinctEdgesTableDevice[cubeCase] : 0);
-        unsigned int numTriangles(eds != 0xe000 ? 0 : distinctEdges & 7);
-        unsigned int numVertices(sycl::popcount(distinctEdges &= eds));
-        unsigned int laneid = (threadIdx_x + voxelXLv2 * (threadIdx_y + voxelYLv2 * threadIdx_z)) % 32;
-        unsigned warpid((threadIdx_x + voxelXLv2 * (threadIdx_y + voxelYLv2 * threadIdx_z)) >> 5);
-        constexpr unsigned int threadNum(voxelXLv2 * voxelYLv2 * voxelZLv2);
-        constexpr unsigned int warpNum(threadNum / 32);
-        unsigned int sumVertices(numVertices);
-        unsigned int sumTriangles(numTriangles);
-
+      }
+      if (laneid == 31)
+      {
+        sumsVertices[warpid] = sumVertices;
+        sumsTriangles[warpid] = sumTriangles;
+      }
+      memT.team_barrier();
+      if (warpid == 0)
+      {
+        unsigned warpSumVertices = sumsVertices[laneid];
+        unsigned warpSumTriangles = sumsTriangles[laneid];
         #pragma unroll
-        for (int c0(1); c0 < 32; c0 *= 2)
+        for (int c0(1); c0 < warpNum; c0 *= 2)
         {
-          unsigned int tp0(sg.shuffle_up(sumVertices, c0));
-          unsigned int tp1(sg.shuffle_up(sumTriangles, c0));
+          unsigned int tp0(Kokkos::shfl_up(memT, warpSumVertices, c0));
+          unsigned int tp1(Kokkos::shfl_up(memT, warpSumTriangles, c0));
           if (laneid >= c0)
           {
-            sumVertices += tp0;
-            sumTriangles += tp1;
+            warpSumVertices += tp0;
+            warpSumTriangles += tp1;
           }
         }
-        if (laneid == 31)
-        {
-          sumsVertices[warpid] = sumVertices;
-          sumsTriangles[warpid] = sumTriangles;
-        }
-        item.barrier(sycl::access::fence_space::local_space);
-        if (warpid == 0)
-        {
-          unsigned warpSumVertices = sumsVertices[laneid];
-          unsigned warpSumTriangles = sumsTriangles[laneid];
-          #pragma unroll
-          for (int c0(1); c0 < warpNum; c0 *= 2)
-          {
-            unsigned int tp0(sg.shuffle_up(warpSumVertices, c0));
-            unsigned int tp1(sg.shuffle_up(warpSumTriangles, c0));
-            if (laneid >= c0)
-            {
-              warpSumVertices += tp0;
-              warpSumTriangles += tp1;
-            }
-          }
-          sumsVertices[laneid] = warpSumVertices;
-          sumsTriangles[laneid] = warpSumTriangles;
-        }
-        item.barrier(sycl::access::fence_space::local_space);
-        if (warpid != 0)
-        {
-          sumVertices += sumsVertices[warpid - 1];
-          sumTriangles += sumsTriangles[warpid - 1];
-        }
-        if (eds == 0)
-        {
-          sumsVertices[31] = atomicAdd(countedVerticesNumDevice, sumVertices);
-          sumsTriangles[31] = atomicAdd(countedTrianglesNumDevice, sumTriangles);
-        }
+        sumsVertices[laneid] = warpSumVertices;
+        sumsTriangles[laneid] = warpSumTriangles;
+      }
+      memT.team_barrier();
+      if (warpid != 0)
+      {
+        sumVertices += sumsVertices[warpid - 1];
+        sumTriangles += sumsTriangles[warpid - 1];
+      }
+      if (eds == 0)
+      {
+        sumsVertices[31] = atomicAdd(countedVerticesNumDevice, sumVertices);
+        sumsTriangles[31] = atomicAdd(countedTrianglesNumDevice, sumTriangles);
+      }
 
-        unsigned int interOffsetVertices(sumVertices - numVertices);
-        sumVertices = interOffsetVertices + sumsVertices[31];//exclusive offset
-        sumTriangles = sumTriangles + sumsTriangles[31] - numTriangles;//exclusive offset
-        vertexIndices[threadIdx_z][threadIdx_y][threadIdx_x] = interOffsetVertices | distinctEdges;
-        item.barrier(sycl::access::fence_space::local_space);
+      unsigned int interOffsetVertices(sumVertices - numVertices);
+      sumVertices = interOffsetVertices + sumsVertices[31];//exclusive offset
+      sumTriangles = sumTriangles + sumsTriangles[31] - numTriangles;//exclusive offset
+      vertexIndices[threadIdx_z][threadIdx_y][threadIdx_x] = interOffsetVertices | distinctEdges;
+      memT.team_barrier();
 
-        for (unsigned int c0(0); c0 < numTriangles; ++c0)
+      for (unsigned int c0(0); c0 < numTriangles; ++c0)
+      {
+        #pragma unroll
+        for (unsigned int c1(0); c1 < 3; ++c1)
         {
-          #pragma unroll
-          for (unsigned int c1(0); c1 < 3; ++c1)
-          {
-            int edgeID(triTableDevice[16 * cubeCase + 3 * c0 + c1]);
-            uchar4 edgePos(edgeIDTableDevice[edgeID]);
-            unsigned short vertexIndex(
-              vertexIndices[threadIdx_z + edgePos.z()][threadIdx_y + edgePos.y()][threadIdx_x + edgePos.x()]);
-            unsigned int tp(sycl::popcount(vertexIndex >> (16 - edgePos.w())) + (vertexIndex & 0x1fff));
-            atomicAdd(trianglesDevice, (unsigned long long)(sumsVertices[31] + tp));
-          }
+          int edgeID(triTableDevice[16 * cubeCase + 3 * c0 + c1]);
+          uchar4 edgePos(edgeIDTableDevice[edgeID]);
+          unsigned short vertexIndex(
+            vertexIndices[threadIdx_z + edgePos.z()][threadIdx_y + edgePos.y()][threadIdx_x + edgePos.x()]);
+          unsigned int tp(Kokkos::popcount(vertexIndex >> (16 - edgePos.w())) + (vertexIndex & 0x1fff));
+          atomicAdd(trianglesDevice, (unsigned long long)(sumsVertices[31] + tp));
         }
+      }
 
-        // sumVertices may be too large for a GPU memory
-        float zp = 0.f, cx = 0.f, cy = 0.f, cz = 0.f;
+      // sumVertices may be too large for a GPU memory
+      float zp = 0.f, cx = 0.f, cy = 0.f, cz = 0.f;
 
-        if (distinctEdges & (1 << 15))
-        {
-          zp = zeroPoint(x, v, value[threadIdx_z][threadIdx_y][threadIdx_x + 1], isoValue);
-          cy = transformToCoord(y);
-          cz = transformToCoord(z);
-        }
-        if (distinctEdges & (1 << 14))
-        {
-          cx = transformToCoord(x);
-          zp += zeroPoint(y, v, value[threadIdx_z][threadIdx_y + 1][threadIdx_x], isoValue);
-          cz += transformToCoord(z);
-        }
-        if (distinctEdges & (1 << 13))
-        {
-          cx += transformToCoord(x);
-          cy += transformToCoord(y);
-          zp += zeroPoint(z, v, value[threadIdx_z + 1][threadIdx_y][threadIdx_x], isoValue);
-        }
-        atomicAdd(coordXDevice, cx);
-        atomicAdd(coordYDevice, cy);
-        atomicAdd(coordZDevice, cz);
-        atomicAdd(coordZPDevice, zp);
-      });
-    }).wait();
+      if (distinctEdges & (1 << 15))
+      {
+        zp = zeroPoint(x, v, value[threadIdx_z][threadIdx_y][threadIdx_x + 1], isoValue);
+        cy = transformToCoord(y);
+        cz = transformToCoord(z);
+      }
+      if (distinctEdges & (1 << 14))
+      {
+        cx = transformToCoord(x);
+        zp += zeroPoint(y, v, value[threadIdx_z][threadIdx_y + 1][threadIdx_x], isoValue);
+        cz += transformToCoord(z);
+      }
+      if (distinctEdges & (1 << 13))
+      {
+        cx += transformToCoord(x);
+        cy += transformToCoord(y);
+        zp += zeroPoint(z, v, value[threadIdx_z + 1][threadIdx_y][threadIdx_x], isoValue);
+      }
+      atomicAdd(coordXDevice, cx);
+      atomicAdd(coordYDevice, cy);
+      atomicAdd(coordZDevice, cz);
+      atomicAdd(coordZPDevice, zp);
+    });
     Kokkos::fence();
 
     auto end = std::chrono::steady_clock::now();
     auto ktime = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
     time += ktime;
 
-    Kokkos::deep_copy(vcountedVerticesNum, countedVerticesNumDevice);
-    Kokkos::deep_copy(vcountedTrianglesNum, countedTrianglesNumDevice);
+    Kokkos::Impl::DeepCopy<host_memory, MemSpace>(&countedVerticesNum, countedVerticesNumDevice, sizeof(unsigned int));
+    Kokkos::Impl::DeepCopy<host_memory, MemSpace>(&countedTrianglesNum, countedTrianglesNumDevice, sizeof(unsigned int));
     Kokkos::fence();
+
+    Kokkos::kokkos_free(minMaxLv2Device);
+    Kokkos::kokkos_free(blockIndicesLv2Device);
   }
 
   printf("Block Lv1: %u\nBlock Lv2: %u\n", countedBlockNumLv1, countedBlockNumLv2);
@@ -593,6 +590,21 @@ int main(int argc, char* argv[])
   bool ok = (countedBlockNumLv1 == 8296 && countedBlockNumLv2 == 240380 &&
              countedVerticesNum == 4856560 && countedTrianglesNum == 6101640);
   printf("%s\n", ok ? "PASS" : "FAIL");
+
+  Kokkos::kokkos_free(minMaxLv1Device);
+  Kokkos::kokkos_free(blockIndicesLv1Device);
+  Kokkos::kokkos_free(countedBlockNumLv1Device);
+  Kokkos::kokkos_free(countedBlockNumLv2Device);
+  Kokkos::kokkos_free(distinctEdgesTableDevice);
+  Kokkos::kokkos_free(triTableDevice);
+  Kokkos::kokkos_free(edgeIDTableDevice);
+  Kokkos::kokkos_free(countedVerticesNumDevice);
+  Kokkos::kokkos_free(countedTrianglesNumDevice);
+  Kokkos::kokkos_free(trianglesDevice);
+  Kokkos::kokkos_free(coordXDevice);
+  Kokkos::kokkos_free(coordYDevice);
+  Kokkos::kokkos_free(coordZDevice);
+  Kokkos::kokkos_free(coordZPDevice);
   }
   Kokkos::finalize();
   return 0;
