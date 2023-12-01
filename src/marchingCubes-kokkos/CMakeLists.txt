@@ -59,7 +59,7 @@ set(Sources
 )
 
 set(Headers
-    ../marchingCubes-cuda/tables.h
+    tables.h
 )
 
 set(CFLAGS "-O3")
