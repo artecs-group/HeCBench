@@ -49,7 +49,7 @@ constexpr unsigned int gridXLv2(gridXLv1* blockXLv2);
 constexpr unsigned int gridYLv2(gridYLv1* blockYLv2);
 //constexpr unsigned int gridZLv2(gridZLv1* blockZLv2);
 
-KOKKOS_INLINE_FUNCTION float f(unsigned int x, unsigned int y, unsigned int z)
+KOKKOS_IMPL_INLINE_FUNCTION float f(unsigned int x, unsigned int y, unsigned int z)
 {
   constexpr float d(2.0f / N);
   float xf((int(x - Nd2)) * d);//[-1, 1)
@@ -58,12 +58,12 @@ KOKKOS_INLINE_FUNCTION float f(unsigned int x, unsigned int y, unsigned int z)
   return 1.f - 16.f * xf * yf * zf - 4.f * (xf * xf + yf * yf + zf * zf);
 }
 
-KOKKOS_INLINE_FUNCTION float zeroPoint(unsigned int x, float v0, float v1, float isoValue)
+KOKKOS_IMPL_INLINE_FUNCTION float zeroPoint(unsigned int x, float v0, float v1, float isoValue)
 {
   return ((x * (v1 - isoValue) + (x + 1) * (isoValue - v0)) / (v1 - v0) - Nd2) * (2.0f / N);
 }
 
-KOKKOS_INLINE_FUNCTION float transformToCoord(unsigned int x)
+KOKKOS_IMPL_INLINE_FUNCTION float transformToCoord(unsigned int x)
 {
   return (int(x) - int(Nd2)) * (2.0f / N);
 }
@@ -104,8 +104,8 @@ void computeMinMaxLv1(float*__restrict minMax)
     for (int c0(16); c0 > 0; c0 /= 2)
     {
       float t0, t1;
-      t0 = Kokkos::shfl_down(0xffffffffu, minV, c0);
-      t1 = Kokkos::shfl_down(0xffffffffu, maxV, c0);
+      t0 = KOKKOS_IF_ON_DEVICE(static_cast<float>(Kokkos::shfl_down(0xffffffffu, minV, c0)));
+      t1 = KOKKOS_IF_ON_DEVICE(static_cast<float>(Kokkos::shfl_down(0xffffffffu, maxV, c0)));
       if (t0 < minV)minV = t0;
       if (t1 > maxV)maxV = t1;
     }
@@ -123,8 +123,8 @@ void computeMinMaxLv1(float*__restrict minMax)
       for (int c0(warpNum / 2); c0 > 0; c0 /= 2)
       {
         float t0, t1;
-        t0 = Kokkos::shfl_down(0xffffffffu, minV, c0);
-        t1 = Kokkos::shfl_down(0xffffffffu, maxV, c0);
+        t0 = KOKKOS_IF_ON_DEVICE(static_cast<float>(Kokkos::shfl_down(0xffffffffu, minV, c0)));
+        t1 = KOKKOS_IF_ON_DEVICE(static_cast<float>(Kokkos::shfl_down(0xffffffffu, maxV, c0)));
         if (t0 < minV)minV = t0;
         if (t1 > maxV)maxV = t1;
       }
@@ -162,7 +162,7 @@ void compactLv1(
   #pragma unroll
     for (int c0(1); c0 < 32; c0 *= 2)
     {
-      unsigned int tp(Kokkos::shfl_up(0xffffffffu, testSum, c0));
+      unsigned int tp(KOKKOS_IF_ON_DEVICE(Kokkos::shfl_up(0xffffffffu, testSum, c0)));
       if (laneid >= c0) testSum += tp;
     }
     if (laneid == 31)sums[warpid] = testSum;
@@ -173,7 +173,7 @@ void compactLv1(
   #pragma unroll
       for (int c0(1); c0 < warpNum; c0 *= 2)
       {
-        unsigned int tp(Kokkos::shfl_up(0xffffffffu, warpSum, c0));
+        unsigned int tp(KOKKOS_IF_ON_DEVICE(Kokkos::shfl_up(0xffffffffu, warpSum, c0)));
         if (laneid >= c0) warpSum += tp;
       }
       sums[laneid] = warpSum;
@@ -225,8 +225,8 @@ void computeMinMaxLv2(
       for (int c1(8); c1 > 0; c1 /= 2)
       {
         float t0, t1;
-        t0 = Kokkos::shfl_down(0xffffffffu, minV, c1);
-        t1 = Kokkos::shfl_down(0xffffffffu, maxV, c1);
+        t0 = KOKKOS_IF_ON_DEVICE(static_cast<float>(Kokkos::shfl_down(0xffffffffu, minV, c1)));
+        t1 = KOKKOS_IF_ON_DEVICE(static_cast<float>(Kokkos::shfl_down(0xffffffffu, maxV, c1)));
         if (t0 < minV)minV = t0;
         if (t1 > maxV)maxV = t1;
       }
@@ -278,7 +278,7 @@ void compactLv2(
   #pragma unroll
     for (int c0(1); c0 < 32; c0 *= 2)
     {
-      unsigned int tp(Kokkos::shfl_up(0xffffffffu, testSum, c0));
+      unsigned int tp(KOKKOS_IF_ON_DEVICE(Kokkos::shfl_up(0xffffffffu, testSum, c0)));
       if (laneid >= c0) testSum += tp;
     }
     if (laneid == 31) sums[warpid] = testSum;
@@ -289,7 +289,7 @@ void compactLv2(
   #pragma unroll
       for (int c0(1); c0 < warpNum; c0 *= 2)
       {
-        unsigned int tp(Kokkos::shfl_up(0xffffffffu, warpSum, c0));
+        unsigned int tp(KOKKOS_IF_ON_DEVICE(Kokkos::shfl_up(0xffffffffu, warpSum, c0)));
         if (laneid >= c0)warpSum += tp;
       }
       sums[laneid] = warpSum;
@@ -411,8 +411,8 @@ int main(int argc, char* argv[])
     Kokkos::TeamPolicy<ExecSpace>(countedBlockNumLv2*BlockSizeGenerating, BlockSizeGenerating)
     .set_scratch_size(0, Kokkos::PerTeam(shSizeTr)), 
     KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
-      unsigned short* vertexIndices = (unsigned short*) memT.team_shmem().get_shmem((voxelZLv2*voxelYLv2*voxelXLv2)*sizeof(unsigned short));
-      float* value = (float*) memT.team_shmem().get_shmem(((voxelZLv2+1)*(voxelYLv2+1)*(voxelXLv2+1))*sizeof(float));
+      unsigned short (*vertexIndices)[voxelYLv2][voxelXLv2] = (unsigned short (*)[voxelYLv2][voxelXLv2]) memT.team_shmem().get_shmem((voxelZLv2*voxelYLv2*voxelXLv2)*sizeof(unsigned short));
+      float (*value)[voxelYLv2 + 1][voxelXLv2 + 1] = (float (*)[voxelYLv2 + 1][voxelXLv2 + 1]) memT.team_shmem().get_shmem(((voxelZLv2+1)*(voxelYLv2+1)*(voxelXLv2+1))*sizeof(float));
       unsigned int* sumsVertices = (unsigned int*) memT.team_shmem().get_shmem(32*sizeof(unsigned int));
       unsigned int* sumsTriangles = (unsigned int*) memT.team_shmem().get_shmem(32*sizeof(unsigned int));
       unsigned int threadIdx_x = memT.team_rank() % voxelXLv2;
@@ -426,6 +426,7 @@ int main(int argc, char* argv[])
       unsigned int y((tp % gridYLv2) * (voxelYLv2 - 1) + threadIdx_y);
       unsigned int z((tp / gridYLv2) * (voxelZLv2 - 1) + threadIdx_z);
       unsigned int eds(7);
+      // TODO: index value in 1D
       float v(value[threadIdx_z][threadIdx_y][threadIdx_x] = f(x, y, z));
       if (threadIdx_x == voxelXLv2 - 1)
       {
@@ -473,8 +474,8 @@ int main(int argc, char* argv[])
       #pragma unroll
       for (int c0(1); c0 < 32; c0 *= 2)
       {
-        unsigned int tp0(Kokkos::shfl_up(0xffffffffu, sumVertices, c0));
-        unsigned int tp1(Kokkos::shfl_up(0xffffffffu, sumTriangles, c0));
+        unsigned int tp0(KOKKOS_IF_ON_DEVICE(Kokkos::shfl_up(0xffffffffu, sumVertices, c0)));
+        unsigned int tp1(KOKKOS_IF_ON_DEVICE(Kokkos::shfl_up(0xffffffffu, sumTriangles, c0)));
         if (laneid >= c0)
         {
           sumVertices += tp0;
@@ -494,8 +495,8 @@ int main(int argc, char* argv[])
         #pragma unroll
         for (int c0(1); c0 < warpNum; c0 *= 2)
         {
-          unsigned int tp0(Kokkos::shfl_up(0xffffffffu, warpSumVertices, c0));
-          unsigned int tp1(Kokkos::shfl_up(0xffffffffu, warpSumTriangles, c0));
+          unsigned int tp0(KOKKOS_IF_ON_DEVICE(Kokkos::shfl_up(0xffffffffu, warpSumVertices, c0)));
+          unsigned int tp1(KOKKOS_IF_ON_DEVICE(Kokkos::shfl_up(0xffffffffu, warpSumTriangles, c0)));
           if (laneid >= c0)
           {
             warpSumVertices += tp0;
@@ -534,7 +535,8 @@ int main(int argc, char* argv[])
           pixel edgePos(edgeIDTableDevice[edgeID]);
           unsigned short vertexIndex(
             vertexIndices[threadIdx_z + edgePos.z][threadIdx_y + edgePos.y][threadIdx_x + edgePos.x]);
-          unsigned int tp(Kokkos::popcount(vertexIndex >> (16 - edgePos.w)) + (vertexIndex & 0x1fff));
+          int popC = Kokkos::popcount(static_cast<unsigned short>(vertexIndex >> (16 - edgePos.w)));
+          unsigned int tp(popC + (vertexIndex & 0x1fff));
           Kokkos::atomic_add(trianglesDevice, (unsigned long long)(sumsVertices[31] + tp));
         }
       }
