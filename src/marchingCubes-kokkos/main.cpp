@@ -21,7 +21,7 @@ typedef Kokkos::HostSpace MemSpace;
 
 typedef Kokkos::LayoutRight Layout;
 
-using host_memory = Kokkos::HostSpace::memory_space;
+typedef Kokkos::HostSpace::memory_space host_memory;
 
 // problem size
 constexpr unsigned int N(1024);
