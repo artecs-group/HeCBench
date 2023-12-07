@@ -2,7 +2,7 @@
 #
 # Script to run HeCBench benchmarks and gather results
 
-import re, time, sys, subprocess, multiprocessing, os
+import re, time, sys, subprocess, multiprocessing, os, shutil
 import argparse
 import json
 
@@ -22,19 +22,19 @@ class Benchmark:
                 self.MAKE_ARGS.append('HIP=no')
         elif name.endswith('kokkos'):
             if args.kokkos_type == 'ngpu':
-                self.MAKE_ARGS.append('-DDEVICE=ngpu')
+                self.MAKE_ARGS = ['-DDEVICE=ngpu']
             elif args.kokkos_type == 'igpu':
-                self.MAKE_ARGS.append('-DDEVICE=igpu')
+                self.MAKE_ARGS = ['-DDEVICE=igpu']
             elif args.kokkos_type == 'cpu':
-                self.MAKE_ARGS.append('-DDEVICE=cpu')
+                self.MAKE_ARGS = ['-DDEVICE=cpu']
         elif name.endswith('cuda'):
             self.MAKE_ARGS = ['CUDA_ARCH=sm_{}'.format(args.nvidia_sm)]
         else:
             self.MAKE_ARGS = []
 
         if args.extra_compile_flags:
-            flags = args.extra_compile_flags.replace(',',' ')
-            self.MAKE_ARGS.append('EXTRA_CFLAGS={}'.format(flags))
+            flags = args.extra_compile_flags.split(',')
+            self.MAKE_ARGS = self.MAKE_ARGS + flags
 
         if args.bench_dir:
             self.path = os.path.realpath(os.path.join(args.bench_dir, name))
@@ -56,15 +56,19 @@ class Benchmark:
 
     def compile(self):
         if self.clean:
-            subprocess.run(["make", "clean"], cwd=self.path).check_returncode()
-            time.sleep(1) # required to make sure clean is done before building, despite run waiting on the invoked executable
+            if self.name.endswith('kokkos'):
+                shutil.rmtree(os.path.join(self.path))
+                os.makedirs(self.path)
+            else:
+                subprocess.run(["make", "clean"], cwd=self.path).check_returncode()
+                time.sleep(1) # required to make sure clean is done before building, despite run waiting on the invoked executable
 
         out = subprocess.DEVNULL
         if self.verbose:
             out = subprocess.PIPE
 
         if self.name.endswith('kokkos'):
-            proc0 = subprocess.run(["cmake .."] + self.MAKE_ARGS, cwd=self.path, stdout=out, stderr=subprocess.STDOUT, encoding="ascii")
+            proc0 = subprocess.run(["cmake", ".."] + self.MAKE_ARGS, cwd=self.path, stdout=out, stderr=subprocess.STDOUT, encoding="ascii")
             try:
                 proc0.check_returncode()
             except subprocess.CalledProcessError as e:
@@ -72,10 +76,9 @@ class Benchmark:
                 if e.stderr:
                     print(e.stderr, file=sys.stderr)
                 raise(e)
-            proc = subprocess.run(["make"], cwd=self.path, stdout=out, stderr=subprocess.STDOUT, encoding="ascii")
-        else:
-            proc = subprocess.run(["make"] + self.MAKE_ARGS, cwd=self.path, stdout=out, stderr=subprocess.STDOUT, encoding="ascii")
-        
+
+        command = ["make"] if self.name.endswith('kokkos') else ["make"] + self.MAKE_ARGS
+        proc = subprocess.run(command, cwd=self.path, stdout=out, stderr=subprocess.STDOUT, encoding="ascii")
         try:
             proc.check_returncode()
         except subprocess.CalledProcessError as e:
@@ -138,7 +141,7 @@ def main():
     parser.add_argument('--bench-fails', '-f',
                         help='List of failing benchmarks to ignore')
     parser.add_argument('bench', nargs='+',
-                        help='Either specific benchmark name or sycl, cuda, or hip')
+                        help='Either specific benchmark name or sycl, cuda, hip or kokkos')
 
     args = parser.parse_args()
 
