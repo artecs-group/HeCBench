@@ -6,7 +6,7 @@
 CC        = nvcc
 OPTIMIZE  = yes
 DEBUG     = no
-ARCH      = sm_60
+CUDA_ARCH = sm_60
 LAUNCHER  =
 
 #===============================================================================
