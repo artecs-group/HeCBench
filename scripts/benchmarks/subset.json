@@ -1,0 +1,80 @@
+{
+    "aobench-cuda": [
+        "(?:Average render time: )([0-9.+-e]+)(?: sec)",
+        [
+            "100"
+        ],
+        "ao"
+    ],
+    "aobench-sycl": [
+        "(?:Average render time: )([0-9.+-e]+)(?: sec)",
+        [
+            "100"
+        ],
+        "main"
+    ],
+    "aobench-kokkos": [
+        "(?:Average render time: )([0-9.+-e]+)(?: sec)",
+        [
+            "100"
+        ],
+        "aobench"
+    ],
+    "asmooth-cuda": [
+        "(?:Average filtering time )([0-9.+-e]+)(?: \\(s\\))",
+        [
+          "8192",
+          "2000",
+          "9",
+          "1"
+        ],
+        "main"
+      ],
+      "asmooth-sycl": [
+        "(?:Average filtering time )([0-9.+-e]+)(?: \\(s\\))",
+        [
+          "8192",
+          "2000",
+          "9",
+          "1"
+        ],
+        "main"
+      ],
+      "asmooth-kokkos": [
+        "(?:Average filtering time )([0-9.+-e]+)(?: \\(s\\))",
+        [
+          "8192",
+          "2000",
+          "9",
+          "1"
+        ],
+        "asmooth"
+      ],
+      "convolutionSeparable-cuda": [
+        "(?:Average kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
+        [
+          "8192",
+          "8192",
+          "5"
+        ],
+        "main"
+      ],
+        "convolutionSeparable-sycl": [
+            "(?:Average kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "8192",
+            "8192",
+            "5"
+            ],
+            "main"
+        ],
+        "convolutionSeparable-kokkos": [
+            "(?:Average kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "8192",
+            "8192",
+            "5"
+            ],
+            "convolutionSeparable"
+        ]
+}

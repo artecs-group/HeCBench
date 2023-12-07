@@ -13,3 +13,4 @@
 dpct_output
 */main
 build/
+!scripts/benchmarks/*.json
