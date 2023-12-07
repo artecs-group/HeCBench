@@ -13,17 +13,6 @@ Z. Jin and J. S. Vetter, "A Benchmark Suite for Improving Performance Portabilit
 # Dependencies
   Certain SYCL benchmarks require [oneDPL](https://github.com/oneapi-src/oneDPL), [oneTBB](https://github.com/oneapi-src/oneTBB), [Syclomatic](https://github.com/oneapi-src/SYCLomatic), or [oneMKL interfaces](https://github.com/oneapi-src/oneMKL).
 
-# Build for Kokkos
-Kokkos build was implemented with cmake. To build you have to include kokkos paths. It also includes a run command.
-
-```bash
-mkdir build
-cd build
-cmake .. -DDEVICE=ngpu -DKOKKOS_INSTALL_DIR=/opt/kokkos4.1/kokkos/cuda_install/ -DKokkos_DIR=/opt/kokkos4.1/kokkos/cuda_install/lib/cmake/Kokkos/
-make
-make run
-```
-
 # Benchmark categories
 Each benchmark falls into a single category. While such classification is not accurate, the arrangement serves as a starting point for users of the benchmark suite. Please see the Reference for more information about each benchmark. 
 
@@ -86,30 +75,41 @@ Each benchmark falls into a single category. While such classification is not ac
 
 
 # Run a benchmark
-  Option 1: Makefile scripts that build and run an individual benchmark 
-  
-      Navigate to a benchmark in CUDA (benchmark-cuda) and type  
-      `make ARCH=sm_70 run`  // run on a NIVIDA GPU device with compute capability 7.0
-      
-      Navigate to a benchmark in HIP (benchmark-hip) and type  
-      `make run`
-      
-      Navigate to a benchmark in SYCL (benchmark-sycl) and type   
-     `make CUDA=yes CUDA_ARCH=sm_70 GCC_TOOLCHAIN="" run` (targeting an NVIDIA GPU)
-     `make HIP=yes HIP_ARCH=gfx908 run`                   (targeting an AMD GPU)  
-     `make run` or `make CC=icpx run`                     (targeting an Intel GPU)
-      NOTE: `--gcc-toolchain` may be required for the SYCL compiler to select the proper GNU toolchain; otherwise unset GCC_TOOLCHAIN
-     
-      Navigate to a benchmark in OpenMP (benchmark-omp) and type  
-      `make -f Makefile.nvc run`  (targeting NVIDIA GPUs)
-      `make -f Makefile.aomp run` (targeting AMD GPUs)
-      `make run`                  (targeting Intel GPUs) 
-      
-      Users may need to set appropriate values (e.g., `sm_80`, `sm_90`, `gfx906`, `gfx1030`) for their target offloading devices  
-      `make -f Makefile.nvc SM=cc80 run`
-      `make -f Makefile.aomp ARCH=gfx906 run`
-      
-  Option 2: Python scripts that help build, run and gather results from the benchmarks. As well as a basic script to compare results from two different runs.
+## Option 1: Makefile scripts that build and run an individual benchmark
+    Navigate to a benchmark in CUDA (benchmark-cuda) and type  
+    `make ARCH=sm_70 run`  // run on a NIVIDA GPU device with compute capability 7.0
+    
+    Navigate to a benchmark in HIP (benchmark-hip) and type  
+    `make run`
+    
+    Navigate to a benchmark in SYCL (benchmark-sycl) and type   
+    `make CUDA=yes CUDA_ARCH=sm_70 GCC_TOOLCHAIN="" run` (targeting an NVIDIA GPU)
+    `make HIP=yes HIP_ARCH=gfx908 run`                   (targeting an AMD GPU)  
+    `make run` or `make CC=icpx run`                     (targeting an Intel GPU)
+    NOTE: `--gcc-toolchain` may be required for the SYCL compiler to select the proper GNU toolchain; otherwise unset GCC_TOOLCHAIN
+    
+    Navigate to a benchmark in OpenMP (benchmark-omp) and type  
+    `make -f Makefile.nvc run`  (targeting NVIDIA GPUs)
+    `make -f Makefile.aomp run` (targeting AMD GPUs)
+    `make run`                  (targeting Intel GPUs) 
+    
+    Users may need to set appropriate values (e.g., `sm_80`, `sm_90`, `gfx906`, `gfx1030`) for their target offloading devices  
+    `make -f Makefile.nvc SM=cc80 run`
+    `make -f Makefile.aomp ARCH=gfx906 run`
+
+### Option 1 for Kokkos
+  Kokkos build was implemented with cmake. To build you have to include kokkos paths. It also includes a run command.
+
+  ```bash
+  mkdir build
+  cd build
+  cmake .. -DDEVICE=ngpu -DKOKKOS_INSTALL_DIR=/opt/kokkos4.1/kokkos/cuda_install/ -DKokkos_DIR=/opt/kokkos4.1/kokkos/cuda_install/lib/cmake/Kokkos/
+  make
+  make run
+  ```
+
+## Option 2: Python scripts that help build
+  Python scripts that help build, run and gather results from the benchmarks. As well as a basic script to compare results from two different runs.
 
     It works with a `.json` file containing the benchmark names, a regex to
     find the timings in the benchmark output and optional arguments that
