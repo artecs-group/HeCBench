@@ -119,6 +119,7 @@ int main(int argc, char *argv[]) {
     std::cout << std::endl;
   }
 
+  std::cout << "Kernels execution time: " << tot_time << " s" << std::endl;
   std::cout << (tot_bytes/(1024*1024))/tot_time << " MB/s" << std::endl;
 
   return 0;

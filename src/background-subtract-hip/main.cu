@@ -158,6 +158,7 @@ int main(int argc, char* argv[]) {
 
   hipMemcpy(Tn, d_Tn, imgSize_bytes, hipMemcpyDeviceToHost);
 
+#ifdef VERIFY
   // verification
   int sum = 0;
   int bin[4] = {0, 0, 0, 0};
@@ -175,7 +176,7 @@ int main(int argc, char* argv[]) {
   sum = sum / imgSize;
   printf("Average threshold change is %d\n", sum);
   printf("Bin counts are %d %d %d %d\n", bin[0], bin[1], bin[2], bin[3]);
-     
+#endif
   free(Img);
   free(Tn);
   free(Bn);

@@ -315,6 +315,7 @@ int main(int argc, char * argv[])
 
   Kokkos::kokkos_free(tempBuffer);
 
+#ifdef VERIFY
   // verification
   float* verificationOutput = (float*)malloc(sizeBytes);
   memset(verificationOutput, 0, sizeBytes);
@@ -327,7 +328,7 @@ int main(int argc, char * argv[])
     std::cout << "PASS" << std::endl;
   else
     std::cout << "FAIL" << std::endl;
-
+#endif
   free(input);
   free(output);
   free(verificationOutput);

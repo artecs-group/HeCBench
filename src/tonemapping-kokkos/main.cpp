@@ -163,6 +163,7 @@ int main(int argc, char *argv[])
 
   printf("Average kernel execution time: %f (us)\n", (time * 1e-3f) / iterations);
 
+#ifdef VERIFY
   // VerifyResults
   float *referenceOutput = (float*) malloc (sizeof(float) * height * width * numChannels);
 
@@ -298,6 +299,7 @@ int main(int argc, char *argv[])
   {
     std::cout << "PASS" << std::endl;
   }
+#endif
 
   free(input);
   free(output);
