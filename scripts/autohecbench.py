@@ -20,6 +20,13 @@ class Benchmark:
             elif args.sycl_type == 'opencl':
                 self.MAKE_ARGS.append('CUDA=no')
                 self.MAKE_ARGS.append('HIP=no')
+        elif name.endswith('kokkos'):
+            if args.kokkos_type == 'ngpu':
+                self.MAKE_ARGS.append('-DDEVICE=ngpu')
+            elif args.kokkos_type == 'igpu':
+                self.MAKE_ARGS.append('-DDEVICE=igpu')
+            elif args.kokkos_type == 'cpu':
+                self.MAKE_ARGS.append('-DDEVICE=cpu')
         elif name.endswith('cuda'):
             self.MAKE_ARGS = ['CUDA_ARCH=sm_{}'.format(args.nvidia_sm)]
         else:
@@ -32,7 +39,12 @@ class Benchmark:
         if args.bench_dir:
             self.path = os.path.realpath(os.path.join(args.bench_dir, name))
         else:
-            self.path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', name)
+            self.path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'src', name)
+
+        if name.endswith('kokkos'):
+            self.path = os.path.join(self.path, 'build')
+            if not os.path.exists(self.path):
+                os.makedirs(self.path)
 
         self.name = name
         self.binary = binary
@@ -51,7 +63,19 @@ class Benchmark:
         if self.verbose:
             out = subprocess.PIPE
 
-        proc = subprocess.run(["make"] + self.MAKE_ARGS, cwd=self.path, stdout=out, stderr=subprocess.STDOUT, encoding="ascii")
+        if self.name.endswith('kokkos'):
+            proc0 = subprocess.run(["cmake .."] + self.MAKE_ARGS, cwd=self.path, stdout=out, stderr=subprocess.STDOUT, encoding="ascii")
+            try:
+                proc0.check_returncode()
+            except subprocess.CalledProcessError as e:
+                print(f'Failed compilation in {self.path}.\n{e}')
+                if e.stderr:
+                    print(e.stderr, file=sys.stderr)
+                raise(e)
+            proc = subprocess.run(["make"], cwd=self.path, stdout=out, stderr=subprocess.STDOUT, encoding="ascii")
+        else:
+            proc = subprocess.run(["make"] + self.MAKE_ARGS, cwd=self.path, stdout=out, stderr=subprocess.STDOUT, encoding="ascii")
+        
         try:
             proc.check_returncode()
         except subprocess.CalledProcessError as e:
@@ -93,6 +117,8 @@ def main():
                         help='Run a warmup iteration')
     parser.add_argument('--sycl-type', '-s', choices=['cuda', 'hip', 'opencl'], default='cuda',
                         help='Type of SYCL device to use')
+    parser.add_argument('--kokkos-type', '-k', choices=['cpu', 'ngpu', 'igpu'], default='ngpu',
+                        help='Type of Kokkos device to use')
     parser.add_argument('--nvidia-sm', type=int, default=60,
                         help='NVIDIA SM version')
     parser.add_argument('--amd-arch', default='gfx908',
@@ -139,7 +165,7 @@ def main():
     # Build benchmark list
     benches = []
     for b in args.bench:
-        if b in ['sycl', 'cuda', 'hip']:
+        if b in ['sycl', 'cuda', 'hip', 'kokkos']:
             benches.extend([Benchmark(args, k, *v)
                             for k, v in benchmarks.items()
                             if k.endswith(b) and k not in fails])
@@ -161,6 +187,7 @@ def main():
     outfile = sys.stdout
     if args.output:
         outfile = open(args.output, 'w')
+        print("benchmark,repetitions,avg-time,median-time,times", file=outfile)
 
     for b in benches:
         try:
@@ -173,8 +200,11 @@ def main():
             res = []
             for i in range(args.repeat):
                 res.append(str(b.run()))
-
-            print(b.name + "," + ", ".join(res), file=outfile)
+            
+            avg_time:float = sum([float(i) for i in res])/args.repeat
+            median_time:float = sorted(res)[len(res)//2]
+            out:str = f"{b.name},{args.repeat},{avg_time},{median_time},[{','.join(res)}]"
+            print(out, file=outfile)
         except Exception as err:
             print("Error running: ", b.name)
             print(err)

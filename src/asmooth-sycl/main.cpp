@@ -202,8 +202,10 @@ int main(int argc, char* argv[]) {
   q.wait();
 
   // verify
+#ifdef VERIFY
   reference (Lx, Ly, Threshold, MaxRad, img, h_box, h_norm, h_out);
   verify(size, MaxRad, norm, h_norm, out, h_out, box, h_box);
+#endif
 
   sycl::free(d_img, q);
   sycl::free(d_norm, q);

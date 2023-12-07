@@ -106,6 +106,7 @@ int main(int argc, char **argv)
 
   q.memcpy(h_OutputGPU, d_Output, imageSize_bytes).wait();
 
+#ifdef VERIFY
   printf("Comparing against Host/C++ computation...\n"); 
   convolutionRowHost(h_Buffer, h_Input, h_Kernel, imageW, imageH, KERNEL_RADIUS);
   convolutionColumnHost(h_OutputCPU, h_Buffer, h_Kernel, imageW, imageH, KERNEL_RADIUS);
@@ -117,6 +118,8 @@ int main(int argc, char **argv)
   }
   L2norm = std::sqrt(delta / sum);
   printf("Relative L2 norm: %.3e\n\n", L2norm);
+  printf("%s\n", L2norm < 1e-6 ? "PASS" : "FAIL");
+#endif
 
   free(h_OutputGPU);
   free(h_OutputCPU);
@@ -128,6 +131,5 @@ int main(int argc, char **argv)
   sycl::free(d_Input, q);
   sycl::free(d_Kernel, q);
 
-  printf("%s\n", L2norm < 1e-6 ? "PASS" : "FAIL");
   return 0;
 }

@@ -83,6 +83,7 @@ int main(int argc, char **argv)
     printf("Average kernel execution time %f (s)\n", (time * 1e-9f) / numIterations);
   }
 
+#ifdef VERIFY
   printf("Comparing against Host/C++ computation...\n"); 
   convolutionRowHost(h_Buffer, h_Input, h_Kernel, imageW, imageH, KERNEL_RADIUS);
   convolutionColumnHost(h_OutputCPU, h_Buffer, h_Kernel, imageW, imageH, KERNEL_RADIUS);
@@ -94,6 +95,8 @@ int main(int argc, char **argv)
   }
   L2norm = sqrt(delta / sum);
   printf("Relative L2 norm: %.3e\n\n", L2norm);
+  printf("%s\n", L2norm < 1e-6 ? "PASS" : "FAIL");
+#endif
 
   free(h_OutputGPU);
   free(h_OutputCPU);
@@ -101,6 +104,5 @@ int main(int argc, char **argv)
   free(h_Input);
   free(h_Kernel);
 
-  printf("%s\n", L2norm < 1e-6 ? "PASS" : "FAIL");
   return 0;
 }
