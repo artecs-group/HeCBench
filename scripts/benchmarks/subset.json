@@ -269,21 +269,21 @@
             ],
             "seam-carving"
         ],
-        "marching-cubes-cuda": [
+        "marchingCubes-cuda": [
             "(?:Average kernel execution time (generatingTriangles): )([0-9.+-e]+)(?: \\(s\\))",
             [
             "1"
             ],
             "main"
         ],
-        "marching-cubes-sycl": [
+        "marchingCubes-sycl": [
             "(?:Average kernel execution time (generatingTriangles): )([0-9.+-e]+)(?: \\(s\\))",
             [
             "1"
             ],
             "main"
         ],
-        "marching-cubes-kokkos": [
+        "marchingCubes-kokkos": [
             "(?:Average kernel execution time (generatingTriangles): )([0-9.+-e]+)(?: \\(s\\))",
             [
             "1"
