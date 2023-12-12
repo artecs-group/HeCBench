@@ -61,10 +61,16 @@ set(Sources
 
 set(CFLAGS "-O3")
 add_executable(${This} ${Sources})
-target_include_directories(${This} PRIVATE ${oneDPL_INCLUDE_DIRS} "../asmooth-cuda")
+target_include_directories(${This} PRIVATE "../asmooth-cuda")
+if(DEVICE STREQUAL "igpu")
+    target_include_directories(${This} PRIVATE ${oneDPL_INCLUDE_DIRS})
+endif()
 add_definitions(-D"${DEV_TYPE}")
 target_compile_options(${This} PRIVATE ${CFLAGS})
-target_link_libraries(${This} Kokkos::kokkos ${oneDPL_LIBRARIES})
+target_link_libraries(${This} Kokkos::kokkos)
+if(DEVICE STREQUAL "igpu")
+    target_link_libraries(${This} ${oneDPL_LIBRARIES})
+endif()
 
 
 add_custom_target(run
