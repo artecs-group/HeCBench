@@ -5,10 +5,13 @@ This repository contains a collection of heterogeneous computing benchmarks writ
 Z. Jin and J. S. Vetter, "A Benchmark Suite for Improving Performance Portability of the SYCL Programming Model," 2023 IEEE International Symposium on Performance Analysis of Systems and Software (ISPASS), Raleigh, NC, USA, 2023, pp. 325-327, doi: 10.1109/ISPASS57527.2023.00041. (https://ieeexplore.ieee.org/document/10158214)
 
 # Software installation
-[AMD ROCm](https://rocmdocs.amd.com/en/latest/Installation_Guide/Installation-Guide.html)  
-[Intel DPC++ compiler](https://github.com/intel/llvm/blob/sycl/sycl/doc/GetStartedGuide.md) or [Intel oneAPI toolkit](https://software.intel.com/content/www/us/en/develop/articles/installation-guide-for-intel-oneapi-toolkits.html)  
-[NVIDIA HPC SDK](https://developer.nvidia.com/hpc-sdk)
-[Kokkos Core](https://kokkos.github.io/kokkos-core-wiki/building.html)
+* [AMD ROCm](https://rocmdocs.amd.com/en/latest/Installation_Guide/Installation-Guide.html)  
+
+* [Intel DPC++ compiler](https://github.com/intel/llvm/blob/sycl/sycl/doc/GetStartedGuide.md) or [Intel oneAPI toolkit](https://software.intel.com/content/www/us/en/develop/articles/installation-guide-for-intel-oneapi-toolkits.html)
+
+* [NVIDIA HPC SDK](https://developer.nvidia.com/hpc-sdk)
+
+* [Kokkos Core](https://kokkos.github.io/kokkos-core-wiki/building.html)
 
 # Dependencies
   Certain SYCL benchmarks require [oneDPL](https://github.com/oneapi-src/oneDPL), [oneTBB](https://github.com/oneapi-src/oneTBB), [Syclomatic](https://github.com/oneapi-src/SYCLomatic), or [oneMKL interfaces](https://github.com/oneapi-src/oneMKL).
