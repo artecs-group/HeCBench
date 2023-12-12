@@ -108,7 +108,7 @@
             "face"
         ],
         "mriQ-cuda": [
-            "(?:computePhiMag time: )([0-9.+-e]+)(?: s)|(?:computeQ time: )([0-9.+-e]+)(?: s)",
+            "(?:computePhiMag|computeQ)(?: time: )([0-9.+-e]+)(?: s)",
             [
             "datasets/large/input/64_64_64_dataset.bin",
             "output_64"
@@ -116,7 +116,7 @@
             "main"
         ],
         "mriQ-sycl": [
-            "(?:computePhiMag time: )([0-9.+-e]+)(?: s)|(?:computeQ time: )([0-9.+-e]+)(?: s)",
+            "(?:computePhiMag|computeQ)(?: time: )([0-9.+-e]+)(?: s)",
             [
             "../mriQ-cuda/datasets/large/input/64_64_64_dataset.bin",
             "output_64"
@@ -124,7 +124,7 @@
             "main"
         ],
         "mriQ-kokkos": [
-            "(?:computePhiMag time: )([0-9.+-e]+)(?: s)|(?:computeQ time: )([0-9.+-e]+)(?: s)",
+            "(?:computePhiMag|computeQ)(?: time: )([0-9.+-e]+)(?: s)",
             [
             "../../mriQ-cuda/datasets/large/input/64_64_64_dataset.bin",
             "output_64"
@@ -208,7 +208,7 @@
             "main"
         ],
         "morphology-kokkos": [
-            "(?:Average kernel execution time (dilate): )([0-9.+-e]+)(?: \\(s\\))|(?:Average kernel execution time (erode): )([0-9.+-e]+)(?: \\(s\\))",
+            "(?:Average kernel execution time \\()(?:dilate|erode)(?:\\): )([0-9.+-e]+)(?: \\(s\\))",
             [
             "32",
             "32",
@@ -270,28 +270,28 @@
             "seam-carving"
         ],
         "marchingCubes-cuda": [
-            "(?:Average kernel execution time (generatingTriangles): )([0-9.+-e]+)(?: \\(s\\))",
+            "(?:Average kernel execution time \\(generatingTriangles\\): )([0-9.+-e]+)(?: \\(s\\))",
             [
             "1"
             ],
             "main"
         ],
         "marchingCubes-sycl": [
-            "(?:Average kernel execution time (generatingTriangles): )([0-9.+-e]+)(?: \\(s\\))",
+            "(?:Average kernel execution time \\(generatingTriangles\\): )([0-9.+-e]+)(?: \\(s\\))",
             [
             "1"
             ],
             "main"
         ],
         "marchingCubes-kokkos": [
-            "(?:Average kernel execution time (generatingTriangles): )([0-9.+-e]+)(?: \\(s\\))",
+            "(?:Average kernel execution time \\(generatingTriangles\\): )([0-9.+-e]+)(?: \\(s\\))",
             [
             "1"
             ],
-            "marching-cubes"
+            "marchingCubes"
         ],
         "background-subtract-cuda": [
-            "(?:Average kernel execution time (generatingTriangles): )([0-9.+-e]+)(?: \\(us\\))",
+            "(?:Average kernel execution time: )([0-9.+-e]+)(?: \\(us\\))",
             [
             "4096",
             "2048",
@@ -301,7 +301,7 @@
             "main"
         ],
         "background-subtract-sycl": [
-            "(?:Average kernel execution time (generatingTriangles): )([0-9.+-e]+)(?: \\(us\\))",
+            "(?:Average kernel execution time: )([0-9.+-e]+)(?: \\(us\\))",
             [
             "4096",
             "2048",
@@ -311,14 +311,14 @@
             "main"
         ],
         "background-subtract-kokkos": [
-            "(?:Average kernel execution time (generatingTriangles): )([0-9.+-e]+)(?: \\(us\\))",
+            "(?:Average kernel execution time: )([0-9.+-e]+)(?: \\(us\\))",
             [
             "4096",
             "2048",
             "1",
             "2"
             ],
-            "background-subtract"
+            "background-substract"
         ],
         "crc64-cuda": [
             "(?:Kernels execution time: )([0-9.+-e]+)(?: s)",
@@ -348,7 +348,7 @@
             "crc64"
         ],
         "md5hash-cuda": [
-            "(?:time = )([0-9.+-e]+)(t: ms)",
+            "(?:time = )([0-9.+-e]+)(?: ms, rate = [0-9.+-e]+ GHash\\/sec)",
             [
             "1",
             "1"
@@ -356,7 +356,7 @@
             "main"
         ],
         "md5hash-sycl": [
-            "(?:time = )([0-9.+-e]+)(t: ms)",
+            "(?:time = )([0-9.+-e]+)(?: ms, rate = [0-9.+-e]+ GHash\\/sec)",
             [
             "1",
             "1"
@@ -364,7 +364,7 @@
             "main"
         ],
         "md5hash-kokkos": [
-            "(?:time = )([0-9.+-e]+)(t: ms)",
+            "(?:time = )([0-9.+-e]+)(?: ms, rate = [0-9.+-e]+ GHash\\/sec)",
             [
             "1",
             "1"
@@ -399,7 +399,7 @@
             "scan2"
         ],
         "aes-cuda": [
-            "(?:Average kernel execution time: )([0-9.+-e]+)(?: \\(s\\))",
+            "(?:Average kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
             [
             "100",
             "0",
@@ -408,7 +408,7 @@
             "main"
         ],
         "aes-sycl": [
-            "(?:Average kernel execution time: )([0-9.+-e]+)(?: \\(s\\))",
+            "(?:Average kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
             [
             "100",
             "0",
@@ -417,11 +417,11 @@
             "main"
         ],
         "aes-kokkos": [
-            "(?:Average kernel execution time: )([0-9.+-e]+)(?: \\(s\\))",
+            "(?:Average kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
             [
             "100",
             "0",
-            "../urng-sycl/URNG_Input.bmp"
+            "../../urng-sycl/URNG_Input.bmp"
             ],
             "aes"
         ]
