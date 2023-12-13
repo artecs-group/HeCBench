@@ -54,4 +54,4 @@ clean:
 	rm -rf $(program) $(obj) result.raw
 
 run: $(program)
-	$(LAUNCHER) ./$(program) data/CT-MONO2-16-brain.raw result.raw 1000000
+	$(LAUNCHER) ./$(program) data/CT-MONO2-16-brain.raw result.raw 100000

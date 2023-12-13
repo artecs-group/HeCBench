@@ -77,7 +77,7 @@ endif()
 
 
 add_custom_target(run
-    COMMAND ./${This} ${PROJECT_SOURCE_DIR}/data/CT-MONO2-16-brain.raw result.raw 10000
+    COMMAND ./${This} ${PROJECT_SOURCE_DIR}/data/CT-MONO2-16-brain.raw result.raw 100000
     DEPENDS ${PROJECT_BINARY_DIR}/${This}
     WORKING_DIRECTORY .
 )

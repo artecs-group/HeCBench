@@ -6,7 +6,7 @@
 CC        = nvcc
 OPTIMIZE  = yes
 DEBUG     = no
-CUDA_ARCH = sm_60
+CUDA_ARCH = sm_61
 LAUNCHER  =
 
 #===============================================================================
@@ -24,7 +24,7 @@ obj = $(source:.cu=.o)
 #===============================================================================
 
 # Standard Flags
-CFLAGS := $(EXTRA_CFLAGS) -std=c++14 -Xcompiler -Wall -arch=$(ARCH)
+CFLAGS := $(EXTRA_CFLAGS) -std=c++14 -Xcompiler -Wall -arch=$(CUDA_ARCH)
 
 # Linker Flags
 LDFLAGS = 
@@ -55,4 +55,4 @@ clean:
 	rm -rf $(program) $(obj) result.raw
 
 run: $(program)
-	$(LAUNCHER) ./$(program) data/CT-MONO2-16-brain.raw result.raw 1000000
+	$(LAUNCHER) ./$(program) data/CT-MONO2-16-brain.raw result.raw 100000
