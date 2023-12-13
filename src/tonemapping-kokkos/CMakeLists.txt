@@ -77,7 +77,7 @@ endif()
 
 
 add_custom_target(run
-    COMMAND ./${This} ../input.hdr 1000
+    COMMAND ./${This} ../../tonemapping-cuda/input.hdr 5000
     DEPENDS ${PROJECT_BINARY_DIR}/${This}
     WORKING_DIRECTORY .
 )

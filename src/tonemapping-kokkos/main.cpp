@@ -161,7 +161,8 @@ int main(int argc, char *argv[])
       height);
   }
 
-  printf("Average kernel execution time: %f (us)\n", (time * 1e-3f) / iterations);
+  printf("Total kernel execution time: %f (s)\n", (time * 1e-9f));
+  printf("Average kernel execution time: %f (s)\n", (time * 1e-9f) / iterations);
 
 #ifdef VERIFY
   // VerifyResults
