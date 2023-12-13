@@ -38,6 +38,7 @@ int main (int argc, char *argv[]) {
   {
   char* inputFileName = argv[1];
   char* outputFileName = argv[2];
+  const int iterations = atoi(argv[3]);
 
   int numX, numK;		/* Number of X and K values */
   float *kx, *ky, *kz;		/* K trajectory (3D vectors) */
@@ -74,7 +75,8 @@ int main (int argc, char *argv[]) {
   Kokkos::fence();
   auto start = std::chrono::steady_clock::now();
 
-  computePhiMag_GPU(numK, phiR_d, phiI_d, phiMag_d);
+  for(int i = 0; i < iterations; i++)
+    computePhiMag_GPU(numK, phiR_d, phiI_d, phiMag_d);
 
   Kokkos::fence();
   auto end = std::chrono::steady_clock::now();
@@ -114,7 +116,8 @@ int main (int argc, char *argv[]) {
   Kokkos::fence();
   start = std::chrono::steady_clock::now();
 
-  computeQ_GPU(numK, numX, x_d, y_d, z_d, kVals, Qr_d, Qi_d);
+  for(int i = 0; i < iterations; i++)
+    computeQ_GPU(numK, numX, x_d, y_d, z_d, kVals, Qr_d, Qi_d);
 
   Kokkos::fence();
   end = std::chrono::steady_clock::now();

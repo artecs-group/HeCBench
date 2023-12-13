@@ -6,7 +6,7 @@
 CC        = nvcc
 OPTIMIZE  = yes
 DEBUG     = no
-CUDA_ARCH = sm_60
+CUDA_ARCH = sm_61
 LAUNCHER  =
 
 #===============================================================================
@@ -24,7 +24,7 @@ obj = main.o file.o
 #===============================================================================
 
 # Standard Flags
-CFLAGS := $(EXTRA_CFLAGS) -std=c++14 -Xcompiler -Wall -arch=$(ARCH)
+CFLAGS := $(EXTRA_CFLAGS) -std=c++14 -Xcompiler -Wall -arch=$(CUDA_ARCH)
 
 # Linker Flags
 LDFLAGS = 
@@ -56,4 +56,4 @@ clean:
 	rm -rf $(program) $(obj) output*
 
 run: $(program)
-	$(LAUNCHER) ./$(program) datasets/128x128x128/input/128x128x128.bin output_128
+	$(LAUNCHER) ./$(program) datasets/large/input/64_64_64_dataset.bin output_64 200

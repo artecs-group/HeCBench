@@ -77,4 +77,4 @@ clean:
 	rm -rf $(program) $(obj) output*
 
 run: $(program)
-	$(LAUNCHER) ./$(program) ../mriQ-cuda/datasets/large/input/64_64_64_dataset.bin output_64
+	$(LAUNCHER) ./$(program) ../mriQ-cuda/datasets/large/input/64_64_64_dataset.bin output_64 200

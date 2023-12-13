@@ -79,7 +79,7 @@ endif()
 
 
 add_custom_target(run
-    COMMAND ./${This} ../../mriQ-cuda/datasets/large/input/64_64_64_dataset.bin output_64
+    COMMAND ./${This} ../../mriQ-cuda/datasets/large/input/64_64_64_dataset.bin output_64 200
     DEPENDS ${PROJECT_BINARY_DIR}/${This}
     WORKING_DIRECTORY .
 )
