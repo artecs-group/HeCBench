@@ -42,11 +42,14 @@ endif()
 
 set(CMAKE_CXX_EXTENSIONS Off)
 if(DEVICE STREQUAL "igpu")
+    #set(Kokkos_ARCH_INTEL_GEN12LP ON)
+    #set(Kokkos_ARCH_INTEL_GEN11 ON)
     #set(Kokkos_ARCH_INTEL_GEN9 ON)
     set(Kokkos_ENABLE_CXX11_DISPATCH_LAMBDA ON)
     set(CMAKE_CXX_COMPILER icpx)
 else()
     set(Kokkos_ENABLE_CUDA_LAMBDA ON)
+    #set(Kokkos_ARCH_AMPERE86 ON)
     #set(Kokkos_ARCH_PASCAL61 ON)
     set(Kokkos_ENABLE_CXX11_DISPATCH_LAMBDA ON)
     set(CMAKE_CXX_COMPILER ${KOKKOS_INSTALL_DIR}/bin/nvcc_wrapper)
@@ -72,7 +75,7 @@ endif()
 
 
 add_custom_target(run
-    COMMAND ./${This} 100
+    COMMAND ./${This} 10000
     DEPENDS ${PROJECT_BINARY_DIR}/${This}
     WORKING_DIRECTORY .
 )
