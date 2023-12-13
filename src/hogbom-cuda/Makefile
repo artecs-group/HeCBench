@@ -5,8 +5,7 @@
 # Compiler can be set below, or via environment variable
 CC        = nvcc
 OPTIMIZE  = yes
-CUDA_ARCH = no
-ARCH      = sm_60
+CUDA_ARCH = sm_60
 VERIFY    = no
 LAUNCHER  =
 
@@ -23,7 +22,7 @@ obj = main.o kernels.o reference.o timer.o
 #===============================================================================
 
 # Standard Flags
-CFLAGS := $(EXTRA_CFLAGS) -std=c++14 -Xcompiler -Wall -arch=$(ARCH)
+CFLAGS := $(EXTRA_CFLAGS) -std=c++14 -Xcompiler -Wall -arch=$(CUDA_ARCH)
 
 # Linker Flags
 LDFLAGS = 
