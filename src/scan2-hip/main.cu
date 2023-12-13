@@ -321,8 +321,9 @@ int main(int argc, char * argv[])
   hipDeviceSynchronize();
   auto end = std::chrono::steady_clock::now();
   auto time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-  std::cout << "Average execution time of scan kernels: " << time * 1e-3f / iterations
-            << " (us)\n";
+  std::cout << "Total execution time of scan kernels: " << time * 1e-9f << " (s)\n";
+  std::cout << "Average execution time of scan kernels: " << time * 1e-9f / iterations
+            << " (s)\n";
 
   hipMemcpy(output, outputBuffers[0], sizeBytes, hipMemcpyDeviceToHost);
 
