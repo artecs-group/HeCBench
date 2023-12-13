@@ -312,11 +312,11 @@ int main(int argc, char *argv[])
   {
     std::cout << "PASS" << std::endl;
   }
+  free(referenceOutput);
 #endif
 
   free(input);
   free(output);
-  free(referenceOutput);
   sycl::free(inputImageBuffer, q);
   sycl::free(outputImageBuffer, q);
   return 0;

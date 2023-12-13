@@ -317,9 +317,9 @@ int main(int argc, char * argv[])
     std::cout << "PASS" << std::endl;
   else
     std::cout << "FAIL" << std::endl;
+  free(verificationOutput);
 #endif
   free(input);
   free(output);
-  free(verificationOutput);
   return 0;
 }
