@@ -549,6 +549,7 @@ int main(int argc, char* argv[])
   printf("Vertices Size: %u\n", countedBlockNumLv2 * 304);
   printf("Triangles Size: %u\n", countedBlockNumLv2 * 315 * 3);
   printf("Vertices: %u\nTriangles: %u\n", countedVerticesNum, countedTrianglesNum);
+  printf("Total kernel execution time (generatingTriangles): %f (s)\n", (time * 1e-9f));
   printf("Average kernel execution time (generatingTriangles): %f (s)\n", (time * 1e-9f) / repeat);
 
   // specific to the problem size
