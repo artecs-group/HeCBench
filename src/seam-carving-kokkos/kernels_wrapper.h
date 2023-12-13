@@ -13,8 +13,8 @@ void compute_costs(
 #ifndef COMPUTE_COSTS_FULL
 
   size_t lws = COSTS_BLOCKSIZE_Y * COSTS_BLOCKSIZE_X;
-  size_t gwsx = COSTS_BLOCKSIZE_X * ((current_w-1)/(COSTS_BLOCKSIZE_X-2) + 1);
-  size_t gwsy = COSTS_BLOCKSIZE_Y * ((h-1)/(COSTS_BLOCKSIZE_Y-1) + 1);
+  size_t gwsx = (current_w-1)/(COSTS_BLOCKSIZE_X-2) + 1;
+  size_t gwsy = (h-1)/(COSTS_BLOCKSIZE_Y-1) + 1;
 
   Kokkos::parallel_for("compute_costs", 
   Kokkos::TeamPolicy<ExecSpace>(gwsx*gwsy, lws)
@@ -33,8 +33,8 @@ void compute_costs(
 #else
 
   size_t lws = COSTS_BLOCKSIZE_Y * COSTS_BLOCKSIZE_X;
-  size_t gwsx = COSTS_BLOCKSIZE_X * ((current_w-1)/COSTS_BLOCKSIZE_X + 1);
-  size_t gwsy = COSTS_BLOCKSIZE_Y * ((h-1)/COSTS_BLOCKSIZE_Y + 1);
+  size_t gwsx = (current_w-1)/COSTS_BLOCKSIZE_X + 1;
+  size_t gwsy = (h-1)/COSTS_BLOCKSIZE_Y + 1;
 
   Kokkos::parallel_for("compute_costs_full", 
   Kokkos::TeamPolicy<ExecSpace>(gwsx*gwsy, lws)
@@ -64,7 +64,7 @@ void compute_M(
   if(current_w <= 256){
     //compute_M_kernel_small<<<num_blocks, threads_per_block, 2*current_w*sizeof(int)>>>(d_costs_left, d_costs_up, d_costs_right, d_M, w, h, current_w);
     Kokkos::parallel_for("compute_M_small", 
-    Kokkos::TeamPolicy<ExecSpace>(current_w, current_w)
+    Kokkos::TeamPolicy<ExecSpace>(1, current_w)
     .set_scratch_size(0, Kokkos::PerTeam(2*current_w * sizeof(int))), 
     KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
       int* sm = (int*) memT.team_shmem().get_shmem(2*current_w*sizeof(int));
@@ -84,7 +84,7 @@ void compute_M(
     for(int i = 0; i < num_iterations; i++){
       //compute_M_kernel_step1<<<num_blocks, threads_per_block>>>(d_costs_left, d_costs_up, d_costs_right, d_M, w, h, current_w, base_row);
       Kokkos::parallel_for("compute_M_step1", 
-      Kokkos::TeamPolicy<ExecSpace>(COMPUTE_M_BLOCKSIZE_X * ((current_w-1)/COMPUTE_M_BLOCKSIZE_X + 1), COMPUTE_M_BLOCKSIZE_X)
+      Kokkos::TeamPolicy<ExecSpace>((current_w-1)/COMPUTE_M_BLOCKSIZE_X + 1, COMPUTE_M_BLOCKSIZE_X)
       .set_scratch_size(0, Kokkos::PerTeam(2*COMPUTE_M_BLOCKSIZE_X * sizeof(int))), 
       KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
         int* sm = (int*) memT.team_shmem().get_shmem(2*COMPUTE_M_BLOCKSIZE_X*sizeof(int));
@@ -99,7 +99,7 @@ void compute_M(
 
       //compute_M_kernel_step2<<<num_blocks2, threads_per_block>>>(d_costs_left, d_costs_up, d_costs_right, d_M, w, h, current_w, base_row);
       Kokkos::parallel_for("compute_M_step2", 
-      Kokkos::TeamPolicy<ExecSpace>(COMPUTE_M_BLOCKSIZE_X * ((current_w-COMPUTE_M_BLOCKSIZE_X-1)/COMPUTE_M_BLOCKSIZE_X + 1), COMPUTE_M_BLOCKSIZE_X), 
+      Kokkos::TeamPolicy<ExecSpace>((current_w-COMPUTE_M_BLOCKSIZE_X-1)/COMPUTE_M_BLOCKSIZE_X + 1, COMPUTE_M_BLOCKSIZE_X), 
       KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
         compute_M_kernel_step2(memT,
                                 d_costs_left,
@@ -116,7 +116,7 @@ void compute_M(
 
   int block_size = std::min(256, next_pow2(current_w));
   size_t lws (block_size);
-  size_t gws (block_size);
+  size_t gws (1);
 
   int num_el = (current_w-1)/block_size + 1;
   //compute_M_kernel_single<<<num_blocks, threads_per_block, 2*current_w*sizeof(int)>>>(d_costs_left, d_costs_up, d_costs_right, d_M, w, h, current_w, num_el);
@@ -136,7 +136,7 @@ void compute_M(
 #else
 #ifdef COMPUTE_M_ITERATE
 
-  size_t gws (COMPUTE_M_BLOCKSIZE_X * ((current_w-1)/COMPUTE_M_BLOCKSIZE_X + 1));
+  size_t gws ((current_w-1)/COMPUTE_M_BLOCKSIZE_X + 1);
   size_t lws (COMPUTE_M_BLOCKSIZE_X);
 
   //compute_M_kernel_iterate0<<<num_blocks, threads_per_block>>>(d_costs_left, d_costs_up, d_costs_right, d_M, w, current_w);
@@ -154,7 +154,7 @@ void compute_M(
   for(int row = 1; row < h; row++){
   //  compute_M_kernel_iterate1<<<num_blocks, threads_per_block>>>(d_costs_left, d_costs_up, d_costs_right, d_M, w, current_w, row);
     Kokkos::parallel_for("compute_M_iter1", 
-    Kokkos::TeamPolicy<ExecSpace>(COMPUTE_M_BLOCKSIZE_X * ((current_w-1)/COMPUTE_M_BLOCKSIZE_X + 1), COMPUTE_M_BLOCKSIZE_X), 
+    Kokkos::TeamPolicy<ExecSpace>((current_w-1)/COMPUTE_M_BLOCKSIZE_X + 1, COMPUTE_M_BLOCKSIZE_X), 
     KOKKOS_LAMBDA(Kokkos::TeamPolicy<ExecSpace>::member_type memT){
         compute_M_kernel_iterate1(memT,
                                   d_costs_left,
@@ -185,7 +185,7 @@ void find_min_index(
   int reduce_num_elements = current_w;
   do{
     int num_blocks_x = (reduce_num_elements-1)/(REDUCE_BLOCKSIZE_X*REDUCE_ELEMENTS_PER_THREAD) + 1;
-    gws = REDUCE_BLOCKSIZE_X * num_blocks_x;
+    gws = num_blocks_x;
     // min_reduce<<<num_blocks, threads_per_block>>>(reduce_row, d_indices, reduce_num_elements);
     Kokkos::parallel_for("reduce", 
     Kokkos::TeamPolicy<ExecSpace>(gws, lws)
@@ -289,7 +289,7 @@ void approx_setup(
   int num_blocks_x = (current_w-1)/(APPROX_SETUP_BLOCKSIZE_X-4) + 1;
   int num_blocks_y = (h-2)/(APPROX_SETUP_BLOCKSIZE_Y-1) + 1;
   size_t lws (APPROX_SETUP_BLOCKSIZE_Y*APPROX_SETUP_BLOCKSIZE_X);
-  size_t gws (num_blocks_y * APPROX_SETUP_BLOCKSIZE_Y * num_blocks_x * APPROX_SETUP_BLOCKSIZE_X);
+  size_t gws (num_blocks_y * num_blocks_x);
 
   const size_t sm_size (APPROX_SETUP_BLOCKSIZE_Y*APPROX_SETUP_BLOCKSIZE_X);
 
@@ -315,12 +315,12 @@ void approx_setup(
 }
 
 void approx_M(int current_w, int w, int h, int *d_offset_map, int *d_M) {
-  //int num_blocks_x = (current_w - 1) / APPROX_M_BLOCKSIZE_X + 1;
+  int num_blocks_x = (current_w - 1) / APPROX_M_BLOCKSIZE_X + 1;
   int num_blocks_y = h / 2;
 
   int step = 1;
   while (num_blocks_y > 0) {
-    Kokkos::parallel_for("approx_M", Kokkos::TeamPolicy<ExecSpace>(num_blocks_y, Kokkos::AUTO),
+    Kokkos::parallel_for("approx_M", Kokkos::TeamPolicy<ExecSpace>(num_blocks_y*num_blocks_x, APPROX_M_BLOCKSIZE_X),
       KOKKOS_LAMBDA(const Kokkos::TeamPolicy<ExecSpace>::member_type& team) {
         int row = team.league_rank() * 2 * step;
         int next_row = row + step;

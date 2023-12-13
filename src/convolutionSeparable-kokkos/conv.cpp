@@ -36,7 +36,7 @@ void convolutionRows(
     assert ( imageH % ROWS_BLOCKDIM_Y == 0 );
 
     int lws = ROWS_BLOCKDIM_Y * ROWS_BLOCKDIM_X;
-    int gws = ((imageH * imageW / ROWS_RESULT_STEPS) + (lws-1))/lws;
+    int gws = (imageW / ROWS_RESULT_STEPS / ROWS_BLOCKDIM_X) * (imageH/ROWS_BLOCKDIM_Y);
     size_t ssize1 = ROWS_BLOCKDIM_Y;
     size_t ssize2 = (ROWS_RESULT_STEPS + 2 * ROWS_HALO_STEPS) * ROWS_BLOCKDIM_X;
     size_t ssize = ssize1 * ssize2;
@@ -105,7 +105,7 @@ void convolutionColumns(
     assert ( imageH % (COLUMNS_RESULT_STEPS * COLUMNS_BLOCKDIM_Y) == 0 );
 
     int lws = COLUMNS_BLOCKDIM_Y * COLUMNS_BLOCKDIM_X;
-    int gws = ((imageH / COLUMNS_RESULT_STEPS * imageW) + (lws-1))/lws;
+    int gws = (imageW / COLUMNS_BLOCKDIM_X) * (imageH / COLUMNS_RESULT_STEPS / COLUMNS_BLOCKDIM_Y);
     size_t ssize1 = COLUMNS_BLOCKDIM_X;
     size_t ssize2 = (COLUMNS_RESULT_STEPS + 2 * COLUMNS_HALO_STEPS) * COLUMNS_BLOCKDIM_Y + 1;
     size_t ssize = ssize1 * ssize2;
