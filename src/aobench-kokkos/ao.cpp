@@ -311,8 +311,7 @@ void render(unsigned char *img, int w, int h, int nsubsamples,
   Kokkos::deep_copy(d_spheres, vspheres);
 
  Kokkos::parallel_for("render_kernel", 
-    Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>> ({0,0}, {(h+BLOCK_SIZE-1)/BLOCK_SIZE*BLOCK_SIZE, (w+BLOCK_SIZE-1)/BLOCK_SIZE*BLOCK_SIZE}, 
-    {BLOCK_SIZE,BLOCK_SIZE}), 
+    Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>> ({0,0}, {h, w}, {BLOCK_SIZE,BLOCK_SIZE}), 
     KOKKOS_LAMBDA(const int y, const int x){
       if (y < h && x < w) {
 
