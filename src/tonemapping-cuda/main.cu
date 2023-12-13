@@ -304,11 +304,11 @@ int main(int argc, char *argv[])
   {
     std::cout << "PASS" << std::endl;
   }
+  free(referenceOutput);
 #endif
 
   free(input);
   free(output);
-  free(referenceOutput);
   cudaFree(inputImageBuffer);
   cudaFree(outputImageBuffer);
   return 0;
