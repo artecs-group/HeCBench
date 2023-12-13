@@ -183,8 +183,9 @@ int main(int argc, char* argv[]) {
     }
   }
 
-  float kernel_time = (repeat <= 2) ? 0 : (time * 1e-3f) / (repeat - 2);
-  printf("Average kernel execution time: %f (us)\n", kernel_time);
+  float kernel_time = (repeat <= 2) ? 0 : (time * 1e-9f) / (repeat - 2);
+  printf("Average kernel execution time: %f (s)\n", kernel_time);
+  printf("Total kernel execution time: %f (s)\n", time * 1e-9f);
 
   q.memcpy(Tn, d_Tn, imgSize_bytes).wait();
 #ifdef VERIFY

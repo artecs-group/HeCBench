@@ -24,7 +24,7 @@ obj = $(source:.cu=.o)
 #===============================================================================
 
 # Standard Flags
-CFLAGS := $(EXTRA_CFLAGS) -std=c++14 -Xcompiler -Wall -arch=$(ARCH)
+CFLAGS := $(EXTRA_CFLAGS) -std=c++14 -Xcompiler -Wall -arch=$(CUDA_ARCH)
 
 # Linker Flags
 LDFLAGS = 
@@ -53,5 +53,5 @@ clean:
 	rm -rf $(program) $(obj)
 
 run: $(program)
-	$(LAUNCHER) ./$(program) 4096 2048 0 102
-	./$(program) 4096 2048 1 102
+	$(LAUNCHER) ./$(program) 4096 2048 0 1000
+	#./$(program) 4096 2048 1 102
