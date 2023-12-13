@@ -56,7 +56,7 @@ static Peak findPeak(Kokkos::View<float*, Layout, MemSpace> d_image, Kokkos::Vie
   // a peak. Note:  the d_peaks array is not initialized (hence avoiding the
   // memcpy), it is up to the device function to do that
 
-  const int gws{nBlocks * findPeakWidth};
+  const int gws{nBlocks};
   const int lws{findPeakWidth};
 
   // Find peak
