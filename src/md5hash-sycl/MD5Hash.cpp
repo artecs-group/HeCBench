@@ -541,7 +541,7 @@ int main(int argc, char** argv)
       // Calculate the rate and add it to the results
       //
       double rate = double(keyspace) / (double(t)/1000) / 1.e9;
-      std::cout << "time = " << t*1e-9f << " s, rate = " << rate << " GHash/sec\n";
+      std::cout << "time = " << t*1e-3f << " s, rate = " << rate << " GHash/sec\n";
 
       //
       // Double check everything matches (index, key, hash).
