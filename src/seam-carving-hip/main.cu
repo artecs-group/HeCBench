@@ -166,7 +166,7 @@ int main(int argc, char **argv) {
   hipDeviceSynchronize();
   auto end = std::chrono::steady_clock::now();
   float time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-  printf("Execution time of seam carver kernels: %f (ms)\n", time * 1e-6f);
+  printf("Execution time of seam carver kernels: %f (s)\n", time * 1e-9f);
 
   hipMemcpy(h_pixels, d_pixels, img_bytes, hipMemcpyDeviceToHost);
   unsigned char* output = flatten_pixels(h_pixels, w, h, current_w); 
