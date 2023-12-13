@@ -39,15 +39,16 @@ using namespace std;
 
 int main (int argc, char *argv[]) 
 {
-  if (argc != 5) {
+  if (argc != 6) {
     printf("Usage: %s <input image file> <classifier information> ", argv[0]);
-    printf("<class information> <output image file>\n");
+    printf("<class information> <output image file> <iterations>\n");
     exit(-1);
   }
 
   /* detection parameters */
   float scaleFactor = 1.2;
   int minNeighbours = 1;
+  const int iterations = atoi(argv[5]);
 
   printf("-- entering main function --\r\n");
   printf("-- loading image --\r\n");
@@ -84,7 +85,8 @@ int main (int argc, char *argv[])
 
   auto start = std::chrono::steady_clock::now();
 
-  result = detectObjects(image, minSize, maxSize, cascade, scaleFactor, minNeighbours, total_nodes);
+  for(int i = 0; i < iterations; i++)
+    result = detectObjects(image, minSize, maxSize, cascade, scaleFactor, minNeighbours, total_nodes);
 
   auto end = std::chrono::steady_clock::now();
   auto time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();

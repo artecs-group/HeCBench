@@ -189,7 +189,7 @@ std::vector<MyRect> detectObjects( MyImage* _img, MySize minSize, MySize maxSize
     setImageForCascadeClassifier(d_rectangles_array, cascade, sum1, sqsum1, total_nodes);
 
     /* print out for each scale of the image pyramid */
-    printf("detecting faces, iter := %d\n", iter_counter);
+    //printf("detecting faces, iter := %d\n", iter_counter);
 
     /****************************************************
      * Process the current scale with the cascaded fitler.

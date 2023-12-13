@@ -81,7 +81,7 @@ if(DEVICE STREQUAL "igpu")
 endif()
 
 add_custom_target(run
-    COMMAND ./${This} ${PROJECT_SOURCE_DIR}/../face-cuda/dataset/Face.pgm ${PROJECT_SOURCE_DIR}/../face-cuda/dataset/info.txt ${PROJECT_SOURCE_DIR}/../face-cuda/dataset/class.txt Output.pgm
+    COMMAND ./${This} ${PROJECT_SOURCE_DIR}/../face-cuda/dataset/Face.pgm ${PROJECT_SOURCE_DIR}/../face-cuda/dataset/info.txt ${PROJECT_SOURCE_DIR}/../face-cuda/dataset/class.txt Output.pgm 30
     DEPENDS ${PROJECT_BINARY_DIR}/${This}
     WORKING_DIRECTORY .
 )

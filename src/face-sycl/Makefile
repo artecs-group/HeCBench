@@ -98,5 +98,4 @@ clean:
 	rm -f $(program) *.o Output-cpu.pgm Output-gpu.pgm
 
 run: build
-	$(LAUNCHER) ./vj-cpu ../face-cuda/dataset/Face.pgm ../face-cuda/dataset/info.txt ../face-cuda/dataset/class.txt Output-cpu.pgm
-	./vj-gpu ../face-cuda/dataset/Face.pgm ../face-cuda/dataset/info.txt ../face-cuda/dataset/class.txt Output-cpu.pgm
+	./vj-gpu ../face-cuda/dataset/Face.pgm ../face-cuda/dataset/info.txt ../face-cuda/dataset/class.txt Output-cpu.pgm 30

@@ -6,7 +6,7 @@
 CC        = nvcc
 OPTIMIZE  = yes
 DEBUG     = no
-CUDA_ARCH = sm_60
+CUDA_ARCH = sm_61
 LAUNCHER  =
 
 #===============================================================================
@@ -20,7 +20,7 @@ program = vj-cpu vj-gpu
 #===============================================================================
 
 # Standard Flags
-CFLAGS := $(EXTRA_CFLAGS) -std=c++14 -Xcompiler -Wall -arch=$(ARCH)
+CFLAGS := $(EXTRA_CFLAGS) -std=c++14 -Xcompiler -Wall -arch=$(CUDA_ARCH)
 
 # Linker Flags
 LDFLAGS = 
@@ -71,5 +71,4 @@ clean:
 	rm -f $(program) *.o Output-cpu.pgm Output-gpu.pgm
 
 run: build
-	$(LAUNCHER) ./vj-cpu Face.pgm info.txt class.txt Output-cpu.pgm
-	./vj-gpu Face.pgm info.txt class.txt Output-gpu.pgm
+	./vj-gpu dataset/Face.pgm dataset/info.txt dataset/class.txt Output-gpu.pgm 30
