@@ -69,10 +69,10 @@ int main(int argc, char *argv[]) {
 
   int ntest = 0;
   while (++ntest <= ntests) {
-    cout << ntest << " ";
+    //cout << ntest << " ";
 
     size_t test_length = (size_t) (max_test_length*(drand48()+1));
-    cout << test_length << " ";
+    //cout << test_length << " ";
 
     vector<unsigned char> buffer(test_length);
 
@@ -101,15 +101,15 @@ int main(int argc, char *argv[]) {
 
     string pass("pass"), fail("fail");
     uint64_t csc = crc64(&buffer[0], test_length+tlend);
-    cout << ((csc == (uint64_t) -1) ? pass : fail) << " ";
+    //cout << ((csc == (uint64_t) -1) ? pass : fail) << " ";
 
     size_t div_pt = (size_t) (test_length*drand48());
     uint64_t cs1 = crc64(&buffer[0], div_pt);
     uint64_t cs2 = crc64(&buffer[div_pt], test_length - div_pt);
     csc = crc64_combine(cs1, cs2, test_length - div_pt);
-    cout << ((csc == cs) ? pass : fail);
+    //cout << ((csc == cs) ? pass : fail);
 
-    cout << endl;
+    //cout << endl;
   }
 
   std::cout << "Kernels execution time: " << tot_time << " s" << std::endl;
