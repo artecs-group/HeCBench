@@ -24,7 +24,7 @@ obj = $(source:.cu=.o)
 #===============================================================================
 
 # Standard Flags
-CFLAGS := $(EXTRA_CFLAGS) -std=c++14 -Xcompiler -Wall -arch=$(ARCH) -I../include
+CFLAGS := $(EXTRA_CFLAGS) -std=c++14 -Xcompiler -Wall -arch=$(CUDA_ARCH) -I../include
 
 # Linker Flags
 LDFLAGS = 
@@ -56,6 +56,6 @@ clean:
 
 # reuse the image
 run: $(program)
-	$(LAUNCHER) ./$(program) 100 0 ../urng-sycl/URNG_Input.bmp
-	./$(program) 100 1 ../urng-sycl/URNG_Input.bmp
+	$(LAUNCHER) ./$(program) 1000 0 ../urng-sycl/URNG_Input.bmp
+	#./$(program) 100 1 ../urng-sycl/URNG_Input.bmp
 
