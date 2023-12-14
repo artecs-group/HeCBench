@@ -169,7 +169,7 @@
             [
             "data/dirty_4096.img",
             "data/psf_4096.img",
-            "30"
+            "1000"
             ],
             "main"
         ],
@@ -178,7 +178,7 @@
             [
             "../hogbom-cuda/data/dirty_4096.img",
             "../hogbom-cuda/data/psf_4096.img",
-            "30"
+            "1000"
             ],
             "main"
         ],
@@ -187,7 +187,7 @@
             [
             "../../hogbom-cuda/data/dirty_4096.img",
             "../../hogbom-cuda/data/psf_4096.img",
-            "30"
+            "1000"
             ],
             "hogbom"
         ],
