@@ -301,8 +301,12 @@ void saveppm(const char *fname, int w, int h, unsigned char *img)
 
 
 void render(unsigned char *img, int w, int h, int nsubsamples, 
-            const Sphere* spheres, const Plane &plane, unsigned char *d_img, Sphere *d_spheres)
+            const Sphere* spheres, const Plane &plane)
 {
+  Kokkos::View<unsigned char*, Layout, MemSpace> vd_img("d_img", WIDTH*HEIGHT*3);
+  Kokkos::View<Sphere*, Layout, MemSpace> vd_spheres("d_spheres", 3);
+  auto d_img = vd_img.data();
+  auto d_spheres = vd_spheres.data();
   Kokkos::Impl::DeepCopy<MemSpace, host_memory>(d_img, img, w*h*3*sizeof(unsigned char));
   Kokkos::Impl::DeepCopy<MemSpace, host_memory>(d_spheres, spheres, 3*sizeof(Sphere));
 
@@ -373,13 +377,13 @@ int main(int argc, char **argv)
   init_scene(spheres, plane);
 
   unsigned char *img = ( unsigned char * )malloc( WIDTH * HEIGHT * 3 );
-  unsigned char *d_img = (unsigned char*)Kokkos::kokkos_malloc<MemSpace>(WIDTH*HEIGHT*3*sizeof(unsigned char));
-  Sphere *d_spheres = (Sphere*)Kokkos::kokkos_malloc<MemSpace>(3*sizeof(Sphere));
+  // Kokkos::View<unsigned char*, Layout, MemSpace> d_img("d_img", WIDTH*HEIGHT*3);
+  // Kokkos::View<Sphere*, Layout, MemSpace> d_spheres("d_spheres", 3);
 
   clock_t start;
   start = clock();
   for( int i = 0; i < LOOPMAX; ++i ){
-    render(img, WIDTH, HEIGHT, NSUBSAMPLES, spheres, plane, d_img, d_spheres);
+    render(img, WIDTH, HEIGHT, NSUBSAMPLES, spheres, plane);
   }
   clock_t end = clock();
   float delta = ( float )end - ( float )start;
@@ -390,8 +394,6 @@ int main(int argc, char **argv)
 
   saveppm( "ao.ppm", WIDTH, HEIGHT, img );
   free( img );
-  Kokkos::kokkos_free(d_img);
-  Kokkos::kokkos_free(d_spheres);
   }
   Kokkos::finalize();
   return 0;
