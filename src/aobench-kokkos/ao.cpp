@@ -23,6 +23,7 @@ typedef Kokkos::OpenMP ExecSpace;
 typedef Kokkos::HostSpace MemSpace;
 #endif
 
+typedef Kokkos::HostSpace::memory_space host_memory;
 typedef Kokkos::LayoutRight Layout;
 
 typedef struct _vec
@@ -62,12 +63,12 @@ typedef struct _Ray
 } Ray;
 
 
-static float vdot(Vec v0, Vec v1)
+static KOKKOS_INLINE_FUNCTION float vdot(Vec v0, Vec v1)
 {
   return v0.x * v1.x + v0.y * v1.y + v0.z * v1.z;
 }
 
-static void vcross(Vec *c, Vec v0, Vec v1)
+static KOKKOS_INLINE_FUNCTION void vcross(Vec *c, Vec v0, Vec v1)
 {
 
   c->x = v0.y * v1.z - v0.z * v1.y;
@@ -75,7 +76,7 @@ static void vcross(Vec *c, Vec v0, Vec v1)
   c->z = v0.x * v1.y - v0.y * v1.x;
 }
 
-static void vnormalize(Vec *c)
+static KOKKOS_INLINE_FUNCTION void vnormalize(Vec *c)
 {
   float length = Kokkos::sqrt(vdot((*c), (*c)));
 
@@ -86,7 +87,7 @@ static void vnormalize(Vec *c)
   }
 }
 
-void ray_sphere_intersect(Isect *isect, const Ray *ray, const Sphere *sphere)
+KOKKOS_INLINE_FUNCTION void ray_sphere_intersect(Isect *isect, const Ray *ray, const Sphere *sphere)
 {
   Vec rs;
 
@@ -119,7 +120,7 @@ void ray_sphere_intersect(Isect *isect, const Ray *ray, const Sphere *sphere)
 }
 
   
-void ray_plane_intersect(Isect *isect, const Ray *ray, const Plane *plane)
+KOKKOS_INLINE_FUNCTION void ray_plane_intersect(Isect *isect, const Ray *ray, const Plane *plane)
 {
   float d = -vdot(plane->p, plane->n);
   float v = vdot(ray->dir, plane->n);
@@ -140,7 +141,7 @@ void ray_plane_intersect(Isect *isect, const Ray *ray, const Plane *plane)
   }
 }
 
-void orthoBasis(Vec *basis, Vec n)
+KOKKOS_INLINE_FUNCTION void orthoBasis(Vec *basis, Vec n)
 {
   basis[2] = n;
   basis[1].x = 0.f; basis[1].y = 0.f; basis[1].z = 0.f;
@@ -166,14 +167,14 @@ class RNG {
   public:
     unsigned int x;
     const int fmask = (1 << 23) - 1;   
-      RNG(const unsigned int seed) { x = seed; }   
-      int next() {     
+      KOKKOS_INLINE_FUNCTION RNG(const unsigned int seed) { x = seed; }   
+      KOKKOS_INLINE_FUNCTION int next() {     
         x ^= x >> 6;
         x ^= x << 17;     
         x ^= x >> 9;
         return int(x);
       }
-      float operator()(void) {
+      KOKKOS_INLINE_FUNCTION float operator()(void) {
         union {
           float f;
           int i;
@@ -184,8 +185,8 @@ class RNG {
 };
 
 
-void ambient_occlusion(Vec *col, const Isect *isect, 
-		       Kokkos::View<Sphere*, Layout, MemSpace> spheres, const Plane *plane, RNG &rng)
+KOKKOS_INLINE_FUNCTION void ambient_occlusion(Vec *col, const Isect *isect, 
+		       Sphere* spheres, const Plane *plane, RNG &rng)
 {
   int    i, j;
   int    ntheta = NAO_SAMPLES;
@@ -246,7 +247,7 @@ void ambient_occlusion(Vec *col, const Isect *isect,
 }
 
   
-unsigned char my_clamp(float f)
+KOKKOS_INLINE_FUNCTION unsigned char my_clamp(float f)
 {
   int i = (int)(f * 255.5f);
 
@@ -300,67 +301,59 @@ void saveppm(const char *fname, int w, int h, unsigned char *img)
 
 
 void render(unsigned char *img, int w, int h, int nsubsamples, 
-            const Sphere* spheres, const Plane &plane)
+            const Sphere* spheres, const Plane &plane, unsigned char *d_img, Sphere *d_spheres)
 {
-  Kokkos::View<const unsigned char*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vimg(img, w*h*3);
-  Kokkos::View<unsigned char*, Layout, MemSpace> d_img = Kokkos::View<unsigned char*, Layout, MemSpace>("d_img", w*h*3);
-  Kokkos::deep_copy(d_img, vimg);
+  Kokkos::Impl::DeepCopy<MemSpace, host_memory>(d_img, img, w*h*3*sizeof(unsigned char));
+  Kokkos::Impl::DeepCopy<MemSpace, host_memory>(d_spheres, spheres, 3*sizeof(Sphere));
 
-  Kokkos::View<const Sphere*, Layout, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vspheres(spheres, 3);
-  Kokkos::View<Sphere*, Layout, MemSpace> d_spheres = Kokkos::View<Sphere*, Layout, MemSpace>("d_spheres", 3);
-  Kokkos::deep_copy(d_spheres, vspheres);
+  Kokkos::parallel_for("render_kernel", 
+  Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>> ({0,0}, {h,w}, {BLOCK_SIZE,BLOCK_SIZE}), 
+  KOKKOS_LAMBDA(const int y, const int x){
+    if (y < h && x < w) {
 
- Kokkos::parallel_for("render_kernel", 
-    Kokkos::MDRangePolicy<ExecSpace, Kokkos::Rank<2>> ({0,0}, {h, w}, {BLOCK_SIZE,BLOCK_SIZE}), 
-    KOKKOS_LAMBDA(const int y, const int x){
-      if (y < h && x < w) {
+      RNG rng(y * w + x);
+      float s0 = 0.f;
+      float s1 = 0.f;
+      float s2 = 0.f;
 
-        RNG rng(y * w + x);
-        float s0 = 0.f;
-        float s1 = 0.f;
-        float s2 = 0.f;
+      for(int  v = 0; v < nsubsamples; v++ ) {
+        for(int  u = 0; u < nsubsamples; u++ ) {
+          float px = ( x + ( u / ( float )nsubsamples ) - ( w / 2.0f ) ) / ( w / 2.0f );
+          float py = -( y + ( v / ( float )nsubsamples ) - ( h / 2.0f ) ) / ( h / 2.0f );
 
-        for(int  v = 0; v < nsubsamples; v++ ) {
-          for(int  u = 0; u < nsubsamples; u++ ) {
-            float px = ( x + ( u / ( float )nsubsamples ) - ( w / 2.0f ) ) / ( w / 2.0f );
-            float py = -( y + ( v / ( float )nsubsamples ) - ( h / 2.0f ) ) / ( h / 2.0f );
+          Ray ray;
+          ray.org.x = 0.f;
+          ray.org.y = 0.f;
+          ray.org.z = 0.f;
+          ray.dir.x = px;
+          ray.dir.y = py;
+          ray.dir.z = -1.f;
+          vnormalize( &( ray.dir ) );
 
-            Ray ray;
-            ray.org.x = 0.f;
-            ray.org.y = 0.f;
-            ray.org.z = 0.f;
-            ray.dir.x = px;
-            ray.dir.y = py;
-            ray.dir.z = -1.f;
-            vnormalize( &( ray.dir ) );
+          Isect isect;
+          isect.t = 1.0e+17f;
+          isect.hit = 0;
 
-            Isect isect;
-            isect.t = 1.0e+17f;
-            isect.hit = 0;
+          ray_sphere_intersect( &isect, &ray, &d_spheres[0]);
+          ray_sphere_intersect( &isect, &ray, &d_spheres[1]);
+          ray_sphere_intersect( &isect, &ray, &d_spheres[2]);
+          ray_plane_intersect ( &isect, &ray, &plane);
 
-            ray_sphere_intersect( &isect, &ray, &d_spheres[0]);
-            ray_sphere_intersect( &isect, &ray, &d_spheres[1]);
-            ray_sphere_intersect( &isect, &ray, &d_spheres[2]);
-            ray_plane_intersect ( &isect, &ray, &plane);
-
-            if( isect.hit ) {
-              Vec col;
-              ambient_occlusion( &col, &isect, d_spheres, &plane, rng );
-              s0 += col.x;
-              s1 += col.y;
-              s2 += col.z;
-            }
+          if( isect.hit ) {
+            Vec col;
+            ambient_occlusion( &col, &isect, d_spheres, &plane, rng );
+            s0 += col.x;
+            s1 += col.y;
+            s2 += col.z;
           }
         }
-        d_img[ 3 * ( y * w + x ) + 0 ] = my_clamp ( s0 / ( float )( nsubsamples * nsubsamples ) );
-        d_img[ 3 * ( y * w + x ) + 1 ] = my_clamp ( s1 / ( float )( nsubsamples * nsubsamples ) );
-        d_img[ 3 * ( y * w + x ) + 2 ] = my_clamp ( s2 / ( float )( nsubsamples * nsubsamples ) );
       }
-    });
-  {
-    Kokkos::View<unsigned char*, Kokkos::HostSpace, Kokkos::MemoryTraits<Kokkos::Unmanaged>> vimg(img, w*h*3);
-    Kokkos::deep_copy(vimg, d_img);
-  }
+      d_img[ 3 * ( y * w + x ) + 0 ] = my_clamp ( s0 / ( float )( nsubsamples * nsubsamples ) );
+      d_img[ 3 * ( y * w + x ) + 1 ] = my_clamp ( s1 / ( float )( nsubsamples * nsubsamples ) );
+      d_img[ 3 * ( y * w + x ) + 2 ] = my_clamp ( s2 / ( float )( nsubsamples * nsubsamples ) );
+    }
+  });
+  Kokkos::Impl::DeepCopy<host_memory, MemSpace>(img, d_img, w*h*3*sizeof(unsigned char));
 }
 
 int main(int argc, char **argv)
@@ -380,11 +373,13 @@ int main(int argc, char **argv)
   init_scene(spheres, plane);
 
   unsigned char *img = ( unsigned char * )malloc( WIDTH * HEIGHT * 3 );
+  unsigned char *d_img = (unsigned char*)Kokkos::kokkos_malloc<MemSpace>(WIDTH*HEIGHT*3*sizeof(unsigned char));
+  Sphere *d_spheres = (Sphere*)Kokkos::kokkos_malloc<MemSpace>(3*sizeof(Sphere));
 
   clock_t start;
   start = clock();
   for( int i = 0; i < LOOPMAX; ++i ){
-    render(img, WIDTH, HEIGHT, NSUBSAMPLES, spheres, plane );
+    render(img, WIDTH, HEIGHT, NSUBSAMPLES, spheres, plane, d_img, d_spheres);
   }
   clock_t end = clock();
   float delta = ( float )end - ( float )start;
@@ -395,6 +390,8 @@ int main(int argc, char **argv)
 
   saveppm( "ao.ppm", WIDTH, HEIGHT, img );
   free( img );
+  Kokkos::kokkos_free(d_img);
+  Kokkos::kokkos_free(d_spheres);
   }
   Kokkos::finalize();
   return 0;
