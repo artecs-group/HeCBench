@@ -56,7 +56,8 @@ class Benchmark:
 
         self.power = args.power
         if self.power != '' and not os.path.exists(self.power):
-            os.makedirs(self.power)
+            os.umask(0o000)
+            os.makedirs(self.power, 0o777)
 
         self.name = name
         self.binary = binary
