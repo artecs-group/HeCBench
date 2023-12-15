@@ -74,4 +74,4 @@ clean:
 	rm -rf $(program) $(obj)
 
 run: $(program)
-	$(LAUNCHER) ./$(program) input.hdr 1000
+	$(LAUNCHER) ./$(program) ../tonemapping-cuda/input.hdr 5000

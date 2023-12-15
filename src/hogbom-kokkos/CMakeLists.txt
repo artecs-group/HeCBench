@@ -83,7 +83,7 @@ endif()
 
 
 add_custom_target(run
-    COMMAND ./${This} ${PROJECT_SOURCE_DIR}/../hogbom-cuda/data/dirty_4096.img ${PROJECT_SOURCE_DIR}/../hogbom-cuda/data/psf_4096.img 1
+    COMMAND ./${This} ${PROJECT_SOURCE_DIR}/../hogbom-cuda/data/dirty_4096.img ${PROJECT_SOURCE_DIR}/../hogbom-cuda/data/psf_4096.img 1000
     DEPENDS ${PROJECT_BINARY_DIR}/${This}
     WORKING_DIRECTORY .
 )

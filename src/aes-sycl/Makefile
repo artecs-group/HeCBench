@@ -75,5 +75,5 @@ clean:
 	rm -rf $(program) $(obj)
 
 run: $(program)
-	$(LAUNCHER) ./$(program) 100 0 ../urng-sycl/URNG_Input.bmp
-	./$(program) 100 1 ../urng-sycl/URNG_Input.bmp
+	$(LAUNCHER) ./$(program) 1000 0 ../urng-sycl/URNG_Input.bmp
+	#./$(program) 100 1 ../urng-sycl/URNG_Input.bmp

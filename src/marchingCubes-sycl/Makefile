@@ -30,7 +30,7 @@ obj = $(source:.cpp=.o)
 #===============================================================================
 
 # Standard Flags
-CFLAGS := $(EXTRA_CFLAGS) -std=c++17 -Wall -I../marchingCubes-cuda -fsycl
+CFLAGS := $(EXTRA_CFLAGS) -std=c++17 -Wall -I../marchingCubes-cuda -fsycl -fno-sycl-id-queries-fit-in-int
 
 # Linker Flags
 LDFLAGS = 

@@ -74,4 +74,4 @@ clean:
 	rm -rf $(program) $(obj)
 
 run: $(program)
-	./$(program) 4096 2048 1 102
+	./$(program) 4096 2048 0 1000

@@ -76,7 +76,7 @@ endif()
 
 
 add_custom_target(run
-    COMMAND ./${This} 100 33554432 256
+    COMMAND ./${This} 300 33554432 256
     DEPENDS ${PROJECT_BINARY_DIR}/${This}
     WORKING_DIRECTORY .
 )

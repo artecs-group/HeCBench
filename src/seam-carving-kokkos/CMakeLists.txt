@@ -81,7 +81,7 @@ endif()
 
 
 add_custom_target(run
-    COMMAND ./${This} ../../seam-carving-cuda/Broadway_tower.jpg 100 -u
+    COMMAND ./${This} ../../seam-carving-cuda/castle.jpg 2000 -u
     DEPENDS ${PROJECT_BINARY_DIR}/${This}
     WORKING_DIRECTORY .
 )

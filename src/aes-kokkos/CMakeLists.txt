@@ -80,8 +80,8 @@ endif()
 
 
 add_custom_target(run
-    COMMAND ./${This} 100 0 ../../urng-sycl/URNG_Input.bmp
-    COMMAND ./${This} 100 1 ../../urng-sycl/URNG_Input.bmp
+    COMMAND ./${This} 1000 0 ../../urng-sycl/URNG_Input.bmp
+    #COMMAND ./${This} 100 1 ../../urng-sycl/URNG_Input.bmp
     DEPENDS ${PROJECT_BINARY_DIR}/${This}
     WORKING_DIRECTORY .
 )

@@ -74,5 +74,5 @@ clean:
 	rm -rf $(program) $(obj)
 
 run: $(program)
-	$(LAUNCHER) ./$(program) ../seam-carving-cuda/Broadway_tower.jpg 100 -u 
+	$(LAUNCHER) ./$(program) ../seam-carving-cuda/castle.jpg 2000 -u 
 	#./$(program) ../seam-carving-cuda/Broadway_tower.jpg 100 -a
