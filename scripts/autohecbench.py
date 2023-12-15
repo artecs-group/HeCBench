@@ -193,27 +193,33 @@ def main():
     if args.output:
         outfile = open(args.output, 'w')
         print("benchmark,repetitions,avg-time,median-time,stdev,times", file=outfile)
+    
+    # randomize order of benchmarks
+    random.shuffle(benches)
+    results = {b.name: [] for b in benches}
 
+    for i in range(args.repeat):
+        for b in benches:
+            try:
+                if args.verbose:
+                    print(f"running: {b.name} in iteration {i}")
+
+                if args.warmup:
+                    b.run()
+
+                results[b.name].append(float(b.run()))
+            except Exception as err:
+                print("Error running: ", b.name)
+                print(err)
+
+    # save results in csv
     for b in benches:
-        try:
-            if args.verbose:
-                print("running: {}".format(b.name))
-
-            if args.warmup:
-                b.run()
-
-            res = []
-            for i in range(args.repeat):
-                res.append(str(b.run()))
-            
-            avg_time:float = sum([float(i) for i in res])/args.repeat
-            median_time:float = sorted(res)[len(res)//2]
-            stdev_time:float = statistics.stdev(res) if len(res) > 1 else 0.0
-            out:str = f"{b.name},{args.repeat},{avg_time},{median_time},{stdev_time},[{','.join(res)}]"
-            print(out, file=outfile)
-        except Exception as err:
-            print("Error running: ", b.name)
-            print(err)
+        avg_time:float = sum([float(i) for i in results[b.name]])/args.repeat
+        median_time:float = sorted(results[b.name])[len(results[b.name])//2]
+        stdev_time:float = statistics.stdev(results[b.name]) if len(results[b.name]) > 1 else 0.0
+        str_results = [str(i) for i in results[b.name]]
+        out:str = f"{b.name},{args.repeat},{avg_time},{median_time},{stdev_time},[{','.join(str_results)}]"
+        print(out, file=outfile)
 
     if args.output:
         outfile.close()
