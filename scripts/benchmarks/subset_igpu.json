@@ -1,0 +1,434 @@
+{
+    "aobench-cuda": [
+        "(?:Total render time \\()(?:[0-9]+)(?: iterations\\): )([0-9.+-e]+)(?: sec\\.)",
+        [
+            "8000"
+        ],
+        "ao"
+    ],
+    "aobench-sycl": [
+        "(?:Total render time \\()(?:[0-9]+)(?: iterations\\): )([0-9.+-e]+)(?: sec\\.)",
+        [
+            "8000"
+        ],
+        "main"
+    ],
+    "aobench-kokkos": [
+        "(?:Total render time \\()(?:[0-9]+)(?: iterations\\): )([0-9.+-e]+)(?: sec\\.)",
+        [
+            "8000"
+        ],
+        "aobench"
+    ],
+    "asmooth-cuda": [
+        "(?:Average filtering time )([0-9.+-e]+)(?: \\(s\\))",
+        [
+          "8192",
+          "8000",
+          "9",
+          "1"
+        ],
+        "main"
+      ],
+      "asmooth-sycl": [
+        "(?:Average filtering time )([0-9.+-e]+)(?: \\(s\\))",
+        [
+          "8192",
+          "8000",
+          "9",
+          "1"
+        ],
+        "main"
+      ],
+      "asmooth-kokkos": [
+        "(?:Average filtering time )([0-9.+-e]+)(?: \\(s\\))",
+        [
+          "8192",
+          "8000",
+          "9",
+          "1"
+        ],
+        "asmooth"
+      ],
+      "convolutionSeparable-cuda": [
+        "(?:Total kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
+        [
+          "8192",
+          "8192",
+          "100"
+        ],
+        "main"
+      ],
+        "convolutionSeparable-sycl": [
+            "(?:Total kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "8192",
+            "8192",
+            "100"
+            ],
+            "main"
+        ],
+        "convolutionSeparable-kokkos": [
+            "(?:Total kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "8192",
+            "8192",
+            "100"
+            ],
+            "convolutionSeparable"
+        ],
+        "face-cuda": [
+            "(?:Object detection time )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "dataset/Face.pgm",
+            "dataset/info.txt",
+            "dataset/class.txt",
+            "Output-gpu.pgm",
+            "30"
+            ],
+            "vj-gpu"
+        ],
+        "face-sycl": [
+            "(?:Object detection time )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "../face-cuda/dataset/Face.pgm",
+            "../face-cuda/dataset/info.txt",
+            "../face-cuda/dataset/class.txt",
+            "Output-gpu.pgm",
+            "30"
+            ],
+            "vj-gpu"
+        ],
+        "face-kokkos": [
+            "(?:Object detection time )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "../../face-cuda/dataset/Face.pgm",
+            "../../face-cuda/dataset/info.txt",
+            "../../face-cuda/dataset/class.txt",
+            "Output-gpu.pgm",
+            "30"
+            ],
+            "face"
+        ],
+        "mriQ-cuda": [
+            "(?:computePhiMag|computeQ)(?: time: )([0-9.+-e]+)(?: s)",
+            [
+            "datasets/large/input/64_64_64_dataset.bin",
+            "output_64",
+            "300"
+            ],
+            "main"
+        ],
+        "mriQ-sycl": [
+            "(?:computePhiMag|computeQ)(?: time: )([0-9.+-e]+)(?: s)",
+            [
+            "../mriQ-cuda/datasets/large/input/64_64_64_dataset.bin",
+            "output_64",
+            "300"
+            ],
+            "main"
+        ],
+        "mriQ-kokkos": [
+            "(?:computePhiMag|computeQ)(?: time: )([0-9.+-e]+)(?: s)",
+            [
+            "../../mriQ-cuda/datasets/large/input/64_64_64_dataset.bin",
+            "output_64",
+            "300"
+            ],
+            "mriQ"
+        ],
+        "affine-cuda": [
+            "(?:Total kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "data/CT-MONO2-16-brain.raw",
+            "result.raw",
+            "100000"
+            ],
+            "main"
+        ],
+        "affine-sycl": [
+            "(?:Total kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "../affine-cuda/data/CT-MONO2-16-brain.raw",
+            "result.raw",
+            "100000"
+            ],
+            "main"
+        ],
+        "affine-kokkos": [
+            "(?:Total kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "../../affine-cuda/data/CT-MONO2-16-brain.raw",
+            "result.raw",
+            "100000"
+            ],
+            "affine"
+        ],
+        "hogbom-cuda": [
+            "(?:Time )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "data/dirty_4096.img",
+            "data/psf_4096.img",
+            "1000"
+            ],
+            "main"
+        ],
+        "hogbom-sycl": [
+            "(?:Time )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "../hogbom-cuda/data/dirty_4096.img",
+            "../hogbom-cuda/data/psf_4096.img",
+            "1000"
+            ],
+            "main"
+        ],
+        "hogbom-kokkos": [
+            "(?:Time )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "../../hogbom-cuda/data/dirty_4096.img",
+            "../../hogbom-cuda/data/psf_4096.img",
+            "1000"
+            ],
+            "hogbom"
+        ],
+        "morphology-cuda": [
+            "(?:Total kernel execution time \\()(?:dilate|erode)(?:\\): )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "32",
+            "32",
+            "8192",
+            "8192",
+            "30"
+            ],
+            "main"
+        ],
+        "morphology-sycl": [
+            "(?:Total kernel execution time \\()(?:dilate|erode)(?:\\): )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "32",
+            "32",
+            "8192",
+            "8192",
+            "30"
+            ],
+            "main"
+        ],
+        "morphology-kokkos": [
+            "(?:Total kernel execution time \\()(?:dilate|erode)(?:\\): )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "32",
+            "32",
+            "8192",
+            "8192",
+            "30"
+            ],
+            "morphology"
+        ],
+        "tonemapping-cuda": [
+            "(?:Total kernel execution time: )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "input.hdr",
+            "5000"
+            ],
+            "main"
+        ],
+        "tonemapping-sycl": [
+            "(?:Total kernel execution time: )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "../tonemapping-cuda/input.hdr",
+            "5000"
+            ],
+            "main"
+        ],
+        "tonemapping-kokkos": [
+            "(?:Total kernel execution time: )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "../../tonemapping-cuda/input.hdr",
+            "5000"
+            ],
+            "tonemapping"
+        ],
+        "seam-carving-cuda": [
+            "(?:Execution time of seam carver kernels: )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "castle.jpg",
+            "2000",
+            "-u"
+            ],
+            "main"
+        ],
+        "seam-carving-sycl": [
+            "(?:Execution time of seam carver kernels: )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "../seam-carving-cuda/castle.jpg",
+            "2000",
+            "-u"
+            ],
+            "main"
+        ],
+        "seam-carving-kokkos": [
+            "(?:Execution time of seam carver kernels: )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "../../seam-carving-cuda/castle.jpg",
+            "2000",
+            "-u"
+            ],
+            "seam-carving"
+        ],
+        "marchingCubes-cuda": [
+            "(?:Total kernel execution time \\(generatingTriangles\\): )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "100"
+            ],
+            "main"
+        ],
+        "marchingCubes-sycl": [
+            "(?:Total kernel execution time \\(generatingTriangles\\): )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "100"
+            ],
+            "main"
+        ],
+        "marchingCubes-kokkos": [
+            "(?:Total kernel execution time \\(generatingTriangles\\): )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "100"
+            ],
+            "marchingCubes"
+        ],
+        "background-subtract-cuda": [
+            "(?:Total kernel execution time: )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "4096",
+            "2048",
+            "0",
+            "1000"
+            ],
+            "main"
+        ],
+        "background-subtract-sycl": [
+            "(?:Total kernel execution time: )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "4096",
+            "2048",
+            "0",
+            "1000"
+            ],
+            "main"
+        ],
+        "background-subtract-kokkos": [
+            "(?:Total kernel execution time: )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "4096",
+            "2048",
+            "0",
+            "1000"
+            ],
+            "background-substract"
+        ],
+        "crc64-cuda": [
+            "(?:Kernels execution time: )([0-9.+-e]+)(?: s)",
+            [
+            "200",
+            "5",
+            "33554432"
+            ],
+            "main"
+        ],
+        "crc64-sycl": [
+            "(?:Kernels execution time: )([0-9.+-e]+)(?: s)",
+            [
+            "200",
+            "5",
+            "33554432"
+            ],
+            "main"
+        ],
+        "crc64-kokkos": [
+            "(?:Kernels execution time: )([0-9.+-e]+)(?: s)",
+            [
+            "200",
+            "5",
+            "33554432"
+            ],
+            "crc64"
+        ],
+        "md5hash-cuda": [
+            "(?:time = )([0-9.+-e]+)(?: s, rate = [0-9.+-e]+ GHash\\/sec)",
+            [
+            "1",
+            "10"
+            ],
+            "MD5Hash"
+        ],
+        "md5hash-sycl": [
+            "(?:time = )([0-9.+-e]+)(?: s, rate = [0-9.+-e]+ GHash\\/sec)",
+            [
+            "1",
+            "10"
+            ],
+            "MD5Hash"
+        ],
+        "md5hash-kokkos": [
+            "(?:time = )([0-9.+-e]+)(?: s, rate = [0-9.+-e]+ GHash\\/sec)",
+            [
+            "1",
+            "10"
+            ],
+            "md5hash"
+        ],
+        "scan2-cuda": [
+            "(?:Total execution time of scan kernels: )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "300",
+            "33554432",
+            "256"
+            ],
+            "main"
+        ],
+        "scan2-sycl": [
+            "(?:Total execution time of scan kernels: )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "300",
+            "33554432",
+            "256"
+            ],
+            "main"
+        ],
+        "scan2-kokkos": [
+            "(?:Total execution time of scan kernels: )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "300",
+            "33554432",
+            "256"
+            ],
+            "scan2"
+        ],
+        "aes-cuda": [
+            "(?:Total kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "1000",
+            "0",
+            "../urng-sycl/URNG_Input.bmp"
+            ],
+            "main"
+        ],
+        "aes-sycl": [
+            "(?:Total kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "1000",
+            "0",
+            "../urng-sycl/URNG_Input.bmp"
+            ],
+            "main"
+        ],
+        "aes-kokkos": [
+            "(?:Total kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
+            [
+            "1000",
+            "0",
+            "../../urng-sycl/URNG_Input.bmp"
+            ],
+            "aes"
+        ]
+}
