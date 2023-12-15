@@ -5,6 +5,7 @@
 import re, time, sys, subprocess, multiprocessing, os, shutil
 import argparse
 import json
+import statistics
 
 
 class Benchmark:
@@ -190,7 +191,7 @@ def main():
     outfile = sys.stdout
     if args.output:
         outfile = open(args.output, 'w')
-        print("benchmark,repetitions,avg-time,median-time,times", file=outfile)
+        print("benchmark,repetitions,avg-time,median-time,stdev,times", file=outfile)
 
     for b in benches:
         try:
@@ -206,7 +207,8 @@ def main():
             
             avg_time:float = sum([float(i) for i in res])/args.repeat
             median_time:float = sorted(res)[len(res)//2]
-            out:str = f"{b.name},{args.repeat},{avg_time},{median_time},[{','.join(res)}]"
+            stdev_time:float = statistics.stdev(res)
+            out:str = f"{b.name},{args.repeat},{avg_time},{median_time},{stdev_time},[{','.join(res)}]"
             print(out, file=outfile)
         except Exception as err:
             print("Error running: ", b.name)
