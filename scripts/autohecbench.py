@@ -127,6 +127,7 @@ class Benchmark:
         res = sum([float(i) for i in res]) #in case of multiple outputs sum them
         if self.invert:
             res = 1/res
+        time.sleep(5)
         return res
 
 
