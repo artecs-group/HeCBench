@@ -6,6 +6,7 @@ import re, time, sys, subprocess, multiprocessing, os, shutil
 import argparse
 import json
 import statistics
+import random
 
 
 class Benchmark:
@@ -207,7 +208,7 @@ def main():
             
             avg_time:float = sum([float(i) for i in res])/args.repeat
             median_time:float = sorted(res)[len(res)//2]
-            stdev_time:float = statistics.stdev(res)
+            stdev_time:float = statistics.stdev(res) if len(res) > 1 else 0.0
             out:str = f"{b.name},{args.repeat},{avg_time},{median_time},{stdev_time},[{','.join(res)}]"
             print(out, file=outfile)
         except Exception as err:
