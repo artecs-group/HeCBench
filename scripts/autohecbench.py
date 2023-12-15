@@ -11,26 +11,32 @@ import random
 
 class Benchmark:
     def __init__(self, args, name, res_regex, run_args = [], binary = "main", invert = False):
+        self.device = ""
         if name.endswith('sycl'):
             self.MAKE_ARGS = ['GCC_TOOLCHAIN="{}"'.format(args.gcc_toolchain)]
             if args.sycl_type == 'cuda':
                 self.MAKE_ARGS.append('CUDA=yes')
                 self.MAKE_ARGS.append('CUDA_ARCH=sm_{}'.format(args.nvidia_sm))
+                self.device = 'ngpu'
             elif args.sycl_type == 'hip':
                 self.MAKE_ARGS.append('HIP=yes')
                 self.MAKE_ARGS.append('HIP_ARCH={}'.format(args.amd_arch))
             elif args.sycl_type == 'opencl':
                 self.MAKE_ARGS.append('CUDA=no')
                 self.MAKE_ARGS.append('HIP=no')
+                self.device = 'igpu'
         elif name.endswith('kokkos'):
             if args.kokkos_type == 'ngpu':
                 self.MAKE_ARGS = ['-DDEVICE=ngpu']
+                self.device = 'ngpu'
             elif args.kokkos_type == 'igpu':
                 self.MAKE_ARGS = ['-DDEVICE=igpu']
+                self.device = 'igpu'
             elif args.kokkos_type == 'cpu':
                 self.MAKE_ARGS = ['-DDEVICE=cpu']
         elif name.endswith('cuda'):
             self.MAKE_ARGS = ['CUDA_ARCH=sm_{}'.format(args.nvidia_sm)]
+            self.device = 'ngpu'
         else:
             self.MAKE_ARGS = []
 
@@ -47,6 +53,10 @@ class Benchmark:
             self.path = os.path.join(self.path, 'build')
             if not os.path.exists(self.path):
                 os.makedirs(self.path)
+
+        self.power = args.power
+        if self.power != '' and not os.path.exists(self.power):
+            os.makedirs(self.power)
 
         self.name = name
         self.binary = binary
@@ -94,7 +104,19 @@ class Benchmark:
 
     def run(self):
         cmd = ["./" + self.binary] + self.args
+        powerProc = None
+        if self.power != '':
+            pcmd = []
+            if self.device == 'ngpu':
+                pcmd = ['sudo', 'tegrastats', '--interval', '1000', '--logfile', os.path.join(self.power, self.name + '.txt')]
+            elif self.device == 'igpu':
+                pcmd = ['sudo', 'turbostat', '--Summary', '--quiet', '--show', 'PkgTmp,PkgWatt,GFXMHz,GFXWatt,RAMWatt,CorWatt', '--interval', '1', '--out', os.path.join(self.power, self.name + '.txt')]
+            if len(pcmd) > 0:
+                powerProc = subprocess.Popen(pcmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
         proc = subprocess.run(cmd, cwd=self.path, stdout=subprocess.PIPE, encoding="ascii")
+        if powerProc:
+            powerProc.kill()
         out = proc.stdout
         if self.verbose:
             print(" ".join(cmd))
@@ -144,6 +166,8 @@ def main():
                         help='List of failing benchmarks to ignore')
     parser.add_argument('bench', nargs='+',
                         help='Either specific benchmark name or sycl, cuda, hip or kokkos')
+    parser.add_argument('--power', '-p',
+                        help='Measure power consumption (requires root)', default='')
 
     args = parser.parse_args()
 
@@ -201,8 +225,7 @@ def main():
     for i in range(args.repeat):
         for b in benches:
             try:
-                if args.verbose:
-                    print(f"running: {b.name} in iteration {i}")
+                print(f"running: {b.name} in iteration {i}")
 
                 if args.warmup:
                     b.run()
