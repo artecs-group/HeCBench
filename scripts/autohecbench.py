@@ -116,8 +116,10 @@ class Benchmark:
                 powerProc = subprocess.Popen(pcmd, stderr=subprocess.PIPE)
 
         proc = subprocess.run(cmd, cwd=self.path, stdout=subprocess.PIPE, encoding="ascii")
-        if powerProc:
+        if powerProc and self.device == 'igpu':
             powerProc.kill()
+        elif powerProc and self.device == 'ngpu':
+            subprocess.Popen(["sudo", "tegrastats", "--stop"], stderr=subprocess.PIPE)
         out = proc.stdout
         if self.verbose:
             print(" ".join(cmd))
