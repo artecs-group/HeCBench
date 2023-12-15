@@ -172,9 +172,11 @@ int main(int argc, char **argv) {
   unsigned char* output = flatten_pixels(h_pixels, w, h, current_w); 
   printf("Image resized\n");
 
+#ifdef WRITE_OUTPUT
   printf("Saving in resized.bmp...\n");
   int success = stbi_write_bmp("resized.bmp", current_w, h, 3, output);
   printf("%s\n", success ? "Success" : "Failed");
+#endif
 
   cudaFree(d_pixels);
   cudaFree(d_pixels_swap);
