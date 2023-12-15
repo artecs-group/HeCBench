@@ -112,7 +112,7 @@ class Benchmark:
             elif self.device == 'igpu':
                 pcmd = ['sudo', 'turbostat', '--Summary', '--quiet', '--show', 'PkgTmp,PkgWatt,GFXMHz,GFXWatt,RAMWatt,CorWatt', '--interval', '1', '--out', os.path.join(self.power, self.name + '.txt')]
             if len(pcmd) > 0:
-                powerProc = subprocess.Popen(pcmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                powerProc = subprocess.Popen(pcmd, stderr=subprocess.PIPE)
 
         proc = subprocess.run(cmd, cwd=self.path, stdout=subprocess.PIPE, encoding="ascii")
         if powerProc:
