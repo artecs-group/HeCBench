@@ -117,12 +117,13 @@ class Benchmark:
         proc = subprocess.run(cmd, cwd=self.path, stdout=subprocess.PIPE, encoding="ascii")
 
         if powerProc:
-            with open(os.path.join(self.power, self.name + '.txt'), 'w') as file:
-                file.write(powerProc.stdout)
             if self.device == 'igpu':
                 powerProc.kill()
             elif self.device == 'ngpu':
                 subprocess.run(["sudo", "tegrastats", "--stop"])
+            power_out, _ = powerProc.communicate()
+            with open(os.path.join(self.power, self.name + '.txt'), 'w') as file:
+                file.write(power_out.decode('ascii'))
 
         out = proc.stdout
         if self.verbose:
