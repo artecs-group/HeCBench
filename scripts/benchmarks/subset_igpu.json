@@ -407,7 +407,7 @@
         "aes-cuda": [
             "(?:Total kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
             [
-            "1000",
+            "800",
             "0",
             "../urng-sycl/URNG_Input.bmp"
             ],
@@ -416,7 +416,7 @@
         "aes-sycl": [
             "(?:Total kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
             [
-            "1000",
+            "800",
             "0",
             "../urng-sycl/URNG_Input.bmp"
             ],
@@ -425,7 +425,7 @@
         "aes-kokkos": [
             "(?:Total kernel execution time )([0-9.+-e]+)(?: \\(s\\))",
             [
-            "1000",
+            "800",
             "0",
             "../../urng-sycl/URNG_Input.bmp"
             ],
