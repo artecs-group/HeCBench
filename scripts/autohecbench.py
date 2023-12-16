@@ -11,9 +11,9 @@ import random
 
 class Benchmark:
     def __init__(self, args, name, res_regex, run_args = [], binary = "main", invert = False):
-        self.device = ""
         if name.endswith('sycl'):
             self.MAKE_ARGS = ['GCC_TOOLCHAIN="{}"'.format(args.gcc_toolchain)]
+            self.MAKE_ARGS = self.MAKE_ARGS + args.sycl_fcompile.split(',')
             if args.sycl_type == 'cuda':
                 self.MAKE_ARGS.append('CUDA=yes')
                 self.MAKE_ARGS.append('CUDA_ARCH=sm_{}'.format(args.nvidia_sm))
@@ -26,19 +26,22 @@ class Benchmark:
                 self.MAKE_ARGS.append('HIP=no')
                 self.device = 'igpu'
         elif name.endswith('kokkos'):
+            self.MAKE_ARGS = args.kokkos_fcompile.split(',')
             if args.kokkos_type == 'ngpu':
-                self.MAKE_ARGS = ['-DDEVICE=ngpu']
+                self.MAKE_ARGS.append('-DDEVICE=ngpu')
                 self.device = 'ngpu'
             elif args.kokkos_type == 'igpu':
-                self.MAKE_ARGS = ['-DDEVICE=igpu']
+                self.MAKE_ARGS.append('-DDEVICE=igpu')
                 self.device = 'igpu'
             elif args.kokkos_type == 'cpu':
-                self.MAKE_ARGS = ['-DDEVICE=cpu']
+                self.MAKE_ARGS.append('-DDEVICE=cpu')
         elif name.endswith('cuda'):
             self.MAKE_ARGS = ['CUDA_ARCH=sm_{}'.format(args.nvidia_sm)]
+            self.MAKE_ARGS = self.MAKE_ARGS + args.cuda_fcompile.split(',')
             self.device = 'ngpu'
         else:
             self.MAKE_ARGS = []
+            self.device = ''
 
         if args.extra_compile_flags:
             flags = args.extra_compile_flags.split(',')
@@ -177,6 +180,12 @@ def main():
                         help='Either specific benchmark name or sycl, cuda, hip or kokkos')
     parser.add_argument('--power', '-p',
                         help='Measure power consumption (requires root)', default='')
+    parser.add_argument('--cuda-fcompile',
+                        help='Cuda extra compilation flags', default='')
+    parser.add_argument('--sycl-fcompile',
+                        help='SYCL extra compilation flags', default='')
+    parser.add_argument('--kokkos-fcompile',
+                        help='Kokkos extra compilation flags', default='')
 
     args = parser.parse_args()
 
