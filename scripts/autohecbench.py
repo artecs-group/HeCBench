@@ -125,7 +125,7 @@ class Benchmark:
             elif self.device == 'ngpu':
                 subprocess.run(["sudo", "tegrastats", "--stop"])
             power_out, _ = powerProc.communicate()
-            with open(os.path.join(self.power, self.name + '.txt'), 'w') as file:
+            with open(os.path.join(self.power, self.name + '.txt'), 'a') as file:
                 file.write(power_out.decode('ascii'))
 
         out = proc.stdout
