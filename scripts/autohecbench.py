@@ -56,8 +56,7 @@ class Benchmark:
 
         self.power = args.power
         if self.power != '' and not os.path.exists(self.power):
-            os.umask(0o000)
-            os.makedirs(self.power, 0o777)
+            os.makedirs(self.power)
 
         self.name = name
         self.binary = binary
@@ -104,22 +103,27 @@ class Benchmark:
             print(proc.stdout)
 
     def run(self):
-        cmd = ["./" + self.binary] + self.args
         powerProc = None
         if self.power != '':
             pcmd = []
             if self.device == 'ngpu':
-                pcmd = ['sudo', 'tegrastats', '--interval', '1000', '--logfile', os.path.join(self.power, self.name + '.txt')]
+                pcmd = ['sudo', 'tegrastats', '--interval', '1000']
             elif self.device == 'igpu':
-                pcmd = ['sudo', 'turbostat', '--Summary', '--quiet', '--show', 'PkgTmp,PkgWatt,GFXMHz,GFXWatt,RAMWatt,CorWatt', '--interval', '1', '--out', os.path.join(self.power, self.name + '.txt')]
+                pcmd = ['sudo', 'turbostat', '--Summary', '--quiet', '--show', 'PkgTmp,PkgWatt,GFXMHz,GFXWatt,RAMWatt,CorWatt', '--interval', '1']
             if len(pcmd) > 0:
-                powerProc = subprocess.Popen(pcmd)
+                powerProc = subprocess.Popen(pcmd, stdout=subprocess.PIPE)
 
+        cmd = ["./" + self.binary] + self.args
         proc = subprocess.run(cmd, cwd=self.path, stdout=subprocess.PIPE, encoding="ascii")
-        if powerProc and self.device == 'igpu':
-            powerProc.kill()
-        elif powerProc and self.device == 'ngpu':
-            subprocess.run(["sudo", "tegrastats", "--stop"])
+
+        if powerProc:
+            with open(os.path.join(self.power, self.name + '.txt'), 'w') as file:
+                file.write(powerProc.stdout)
+            if self.device == 'igpu':
+                powerProc.kill()
+            elif self.device == 'ngpu':
+                subprocess.run(["sudo", "tegrastats", "--stop"])
+
         out = proc.stdout
         if self.verbose:
             print(" ".join(cmd))
