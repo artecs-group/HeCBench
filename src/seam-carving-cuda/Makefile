@@ -6,7 +6,7 @@
 CC        = nvcc
 OPTIMIZE  = yes
 DEBUG     = no
-ARCH      = sm_60
+CUDA_ARCH = sm_60
 LAUNCHER  =
 
 #===============================================================================
@@ -24,7 +24,7 @@ obj = $(source:.cu=.o)
 #===============================================================================
 
 # Standard Flags
-CFLAGS := $(EXTRA_CFLAGS) -std=c++14 -Xcompiler -Wall -arch=$(ARCH)
+CFLAGS := $(EXTRA_CFLAGS) -std=c++14 -Xcompiler -Wall -arch=$(CUDA_ARCH)
 
 # Linker Flags
 LDFLAGS = 
@@ -53,5 +53,5 @@ clean:
 	rm -rf $(program) $(obj) *.bmp
 
 run: $(program)
-	$(LAUNCHER) ./$(program) Broadway_tower.jpg 100 -u 
+	$(LAUNCHER) ./$(program) castle.jpg 2000 -u 
 	#./$(program) Broadway_tower.jpg 100 -a

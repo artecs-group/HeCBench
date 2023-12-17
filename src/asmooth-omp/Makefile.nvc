@@ -53,7 +53,7 @@ endif
 $(program): $(obj)
 	$(CC) $(CFLAGS) $(obj) -o $@ $(LDFLAGS)
 
-%.o: %.cpp ../asmooth-cuda/reference.cpp
+%.o: %.cpp ../asmooth-cuda/reference.hpp
 	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:

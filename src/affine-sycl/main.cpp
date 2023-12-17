@@ -76,6 +76,7 @@ int main(int argc, char** argv)
 #else
   sycl::queue q(sycl::cpu_selector_v, sycl::property::queue::in_order());
 #endif
+  printf("Running on: %s\n", q.get_device().get_info<sycl::info::device::name>().c_str());
 
   size_t image_size_bytes = sizeof(unsigned short) * X_SIZE * Y_SIZE;
   
@@ -180,6 +181,7 @@ int main(int argc, char** argv)
   q.wait();
   auto end = std::chrono::steady_clock::now();
   auto time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+  std::cout << "   Total kernel execution time " << (time * 1e-9f) << " (s)\n";
   std::cout << "   Average kernel execution time " << (time * 1e-9f) / iterations << " (s)\n";
 
   q.memcpy(output_image, d_output_image, image_size_bytes).wait();

@@ -64,4 +64,4 @@ clean:
 	rm -rf $(program) $(obj) output*
 
 run: $(program)
-	$(LAUNCHER) ./$(program) ../mriQ-cuda/datasets/128x128x128/input/128x128x128.bin output_128
+	$(LAUNCHER) ./$(program) ../mriQ-cuda/datasets/128x128x128/input/128x128x128.bin output_128 200

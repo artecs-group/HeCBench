@@ -166,15 +166,17 @@ int main(int argc, char **argv) {
   hipDeviceSynchronize();
   auto end = std::chrono::steady_clock::now();
   float time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-  printf("Execution time of seam carver kernels: %f (ms)\n", time * 1e-6f);
+  printf("Execution time of seam carver kernels: %f (s)\n", time * 1e-9f);
 
   hipMemcpy(h_pixels, d_pixels, img_bytes, hipMemcpyDeviceToHost);
   unsigned char* output = flatten_pixels(h_pixels, w, h, current_w); 
   printf("Image resized\n");
 
+#ifdef WRITE_OUTPUT
   printf("Saving in resized.bmp...\n");
   int success = stbi_write_bmp("resized.bmp", current_w, h, 3, output);
   printf("%s\n", success ? "Success" : "Failed");
+#endif
 
   hipFree(d_pixels);
   hipFree(d_pixels_swap);

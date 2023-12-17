@@ -3,14 +3,14 @@
 #===============================================================================
 
 # Compiler can be set below, or via environment variable
-CC        = clang++
+CC        = icpx
 OPTIMIZE  = yes
 DEBUG     = no
 LAUNCHER  =
 
 GPU       = yes
 CUDA      = no
-CUDA_ARCH = sm_70
+CUDA_ARCH = sm_61
 HIP       = no
 HIP_ARCH  = gfx908
 
@@ -77,4 +77,4 @@ clean:
 	rm -rf $(program) $(obj) result.raw
 
 run: $(program)
-	$(LAUNCHER) ./$(program) data/CT-MONO2-16-brain.raw result.raw 1000000
+	$(LAUNCHER) ./$(program) data/CT-MONO2-16-brain.raw result.raw 100000

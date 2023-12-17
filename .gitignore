@@ -1,5 +1,4 @@
 *~
-*.txt
 *.bin
 *.o
 *.ppm
@@ -13,3 +12,6 @@
 *.yaml
 dpct_output
 */main
+build/
+!scripts/benchmarks/*.json
+!src/mriQ-cuda/datasets/large/input/*.bin

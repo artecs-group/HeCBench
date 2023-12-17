@@ -477,7 +477,7 @@ int main(int argc, char** argv)
   int passes = atoi(argv[2]);
 
   // 
-  bool verbose = true;
+  bool verbose = false;
 
   for (int size = 1; size <= 4; size++) {
     //
@@ -560,11 +560,7 @@ int main(int argc, char** argv)
       // Calculate the rate and add it to the results
       //
       double rate = double(keyspace) / (double(t)/1000) / 1.e9;
-
-      if (verbose)
-      {
-        cout << "time = " << t << " ms, rate = " << rate << " GHash/sec\n";
-      }
+      cout << "time = " << t*1e-3f << " s, rate = " << rate << " GHash/sec\n";
 
       //
       // Double check everything matches (index, key, hash).

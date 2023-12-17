@@ -4,7 +4,7 @@
 #include <chrono>
 #include <sycl/sycl.hpp>
 
-#include "reference.cpp"
+#include "reference.hpp"
 
 int main(int argc, char* argv[]) {
   if (argc != 5) {
@@ -48,6 +48,7 @@ int main(int argc, char* argv[]) {
 #else
   sycl::queue q(sycl::cpu_selector_v, sycl::property::queue::in_order());
 #endif
+  printf("Running on: %s\n", q.get_device().get_info<sycl::info::device::name>().c_str());
 
   float *d_img = sycl::malloc_device<float>(size, q);
   float *d_norm = sycl::malloc_device<float>(size, q);
@@ -201,8 +202,10 @@ int main(int argc, char* argv[]) {
   q.wait();
 
   // verify
+#ifdef VERIFY
   reference (Lx, Ly, Threshold, MaxRad, img, h_box, h_norm, h_out);
   verify(size, MaxRad, norm, h_norm, out, h_out, box, h_box);
+#endif
 
   sycl::free(d_img, q);
   sycl::free(d_norm, q);

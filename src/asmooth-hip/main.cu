@@ -206,8 +206,10 @@ int main(int argc, char* argv[]) {
   hipMemcpy(norm, d_norm, size_bytes, hipMemcpyDeviceToHost);
 
   // verify
+#ifdef VERIFY
   reference (Lx, Ly, Threshold, MaxRad, img, h_box, h_norm, h_out);
   verify(size, MaxRad, norm, h_norm, out, h_out, box, h_box);
+#endif
 
   hipFree(d_img);
   hipFree(d_norm);

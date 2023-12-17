@@ -124,6 +124,7 @@ int main(int argc, char * argv[])
   cudaDeviceSynchronize();
   auto end = std::chrono::steady_clock::now();
   auto time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+  std::cout << "Total kernel execution time " << (time * 1e-9f) << " (s)\n";
   std::cout << "Average kernel execution time " << (time * 1e-9f) / iterations << " (s)\n";
 
   cudaMemcpy(output, outputBuffer, width * height, cudaMemcpyDeviceToHost);

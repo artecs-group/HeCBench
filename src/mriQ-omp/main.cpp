@@ -36,6 +36,7 @@
 int main (int argc, char *argv[]) {
   char* inputFileName = argv[1];
   char* outputFileName = argv[2];
+  const int iterations = atoi(argv[3]);
 
   int numX, numK;		/* Number of X and K values */
   float *kx, *ky, *kz;		/* K trajectory (3D vectors) */
@@ -68,12 +69,14 @@ int main (int argc, char *argv[]) {
   {
     auto start = std::chrono::steady_clock::now();
 
-    #pragma omp target teams distribute parallel for \
-      num_teams(phiMagBlocks) thread_limit(KERNEL_PHI_MAG_THREADS_PER_BLOCK)
-    for (int indexK = 0; indexK < numK; indexK++) {
-      float real = phiR[indexK];
-      float imag = phiI[indexK];
-      phiMag[indexK] = real*real + imag*imag;
+    for(int i = 0; i < iterations; i++){
+      #pragma omp target teams distribute parallel for \
+        num_teams(phiMagBlocks) thread_limit(KERNEL_PHI_MAG_THREADS_PER_BLOCK)
+      for (int indexK = 0; indexK < numK; indexK++) {
+        float real = phiR[indexK];
+        float imag = phiI[indexK];
+        phiMag[indexK] = real*real + imag*imag;
+      }
     }
 
     auto end = std::chrono::steady_clock::now();
@@ -104,7 +107,8 @@ int main (int argc, char *argv[]) {
 
     auto start = std::chrono::steady_clock::now();
 
-    computeQ_GPU(numK, numX, x, y, z, kVals, ck, Qr, Qi);
+    for(int i = 0; i < iterations; i++)
+      computeQ_GPU(numK, numX, x, y, z, kVals, ck, Qr, Qi);
 
     auto end = std::chrono::steady_clock::now();
     auto time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();

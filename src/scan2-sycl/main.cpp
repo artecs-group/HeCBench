@@ -1,10 +1,10 @@
 /**********************************************************************
-  Copyright ©2013 Advanced Micro Devices, Inc. All rights reserved.
+  Copyright ï¿½2013 Advanced Micro Devices, Inc. All rights reserved.
 
   Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
 
-  •   Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
-  •   Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or
+  ï¿½   Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+  ï¿½   Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or
   other materials provided with the distribution.
 
   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
@@ -288,8 +288,9 @@ int main(int argc, char * argv[])
   q.wait();
   auto end = std::chrono::steady_clock::now();
   auto time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-  std::cout << "Average execution time of scan kernels: " << time * 1e-3f / iterations
-            << " (us)\n";
+  std::cout << "Total execution time of scan kernels: " << time * 1e-9f << " (s)\n";
+  std::cout << "Average execution time of scan kernels: " << time * 1e-9f / iterations
+            << " (s)\n";
 
   q.memcpy(output, outputBuffers[0], sizeBytes).wait();
 
@@ -303,6 +304,7 @@ int main(int argc, char * argv[])
 
   sycl::free(tempBuffer, q);
 
+#ifdef VERIFY
   // verification
   float* verificationOutput = (float*)malloc(sizeBytes);
   memset(verificationOutput, 0, sizeBytes);
@@ -315,9 +317,9 @@ int main(int argc, char * argv[])
     std::cout << "PASS" << std::endl;
   else
     std::cout << "FAIL" << std::endl;
-
+  free(verificationOutput);
+#endif
   free(input);
   free(output);
-  free(verificationOutput);
   return 0;
 }

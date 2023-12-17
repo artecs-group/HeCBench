@@ -1,13 +1,14 @@
 # HeCBench
-This repository contains a collection of heterogeneous computing benchmarks written with CUDA, HIP, SYCL/DPC++, OpenMP-4.5, and Kokkos target offloading for studying performance, portability, and productivity. 
-
-## Background, use cases and future work
-Z. Jin and J. S. Vetter, "A Benchmark Suite for Improving Performance Portability of the SYCL Programming Model," 2023 IEEE International Symposium on Performance Analysis of Systems and Software (ISPASS), Raleigh, NC, USA, 2023, pp. 325-327, doi: 10.1109/ISPASS57527.2023.00041. (https://ieeexplore.ieee.org/document/10158214)
+This repository contains a collection of heterogeneous computing benchmarks written with CUDA, HIP, SYCL/DPC++, OpenMP-4.5 target offloading, and Kokkos for studying performance, portability, and productivity. 
 
 # Software installation
-[AMD ROCm](https://rocmdocs.amd.com/en/latest/Installation_Guide/Installation-Guide.html)  
-[Intel DPC++ compiler](https://github.com/intel/llvm/blob/sycl/sycl/doc/GetStartedGuide.md) or [Intel oneAPI toolkit](https://software.intel.com/content/www/us/en/develop/articles/installation-guide-for-intel-oneapi-toolkits.html)  
-[NVIDIA HPC SDK](https://developer.nvidia.com/hpc-sdk)
+* [AMD ROCm](https://rocmdocs.amd.com/en/latest/Installation_Guide/Installation-Guide.html)  
+
+* [Intel DPC++ compiler](https://github.com/intel/llvm/blob/sycl/sycl/doc/GetStartedGuide.md) or [Intel oneAPI toolkit](https://software.intel.com/content/www/us/en/develop/articles/installation-guide-for-intel-oneapi-toolkits.html)
+
+* [NVIDIA HPC SDK](https://developer.nvidia.com/hpc-sdk)
+
+* [Kokkos Core](https://kokkos.github.io/kokkos-core-wiki/building.html)
 
 # Dependencies
   Certain SYCL benchmarks require [oneDPL](https://github.com/oneapi-src/oneDPL), [oneTBB](https://github.com/oneapi-src/oneTBB), [Syclomatic](https://github.com/oneapi-src/SYCLomatic), or [oneMKL interfaces](https://github.com/oneapi-src/oneMKL).
@@ -74,30 +75,41 @@ Each benchmark falls into a single category. While such classification is not ac
 
 
 # Run a benchmark
-  Option 1: Makefile scripts that build and run an individual benchmark 
-  
-      Navigate to a benchmark in CUDA (benchmark-cuda) and type  
-      `make ARCH=sm_70 run`  // run on a NIVIDA GPU device with compute capability 7.0
-      
-      Navigate to a benchmark in HIP (benchmark-hip) and type  
-      `make run`
-      
-      Navigate to a benchmark in SYCL (benchmark-sycl) and type   
-     `make CUDA=yes CUDA_ARCH=sm_70 GCC_TOOLCHAIN="" run` (targeting an NVIDIA GPU)
-     `make HIP=yes HIP_ARCH=gfx908 run`                   (targeting an AMD GPU)  
-     `make run` or `make CC=icpx run`                     (targeting an Intel GPU)
-      NOTE: `--gcc-toolchain` may be required for the SYCL compiler to select the proper GNU toolchain; otherwise unset GCC_TOOLCHAIN
-     
-      Navigate to a benchmark in OpenMP (benchmark-omp) and type  
-      `make -f Makefile.nvc run`  (targeting NVIDIA GPUs)
-      `make -f Makefile.aomp run` (targeting AMD GPUs)
-      `make run`                  (targeting Intel GPUs) 
-      
-      Users may need to set appropriate values (e.g., `sm_80`, `sm_90`, `gfx906`, `gfx1030`) for their target offloading devices  
-      `make -f Makefile.nvc SM=cc80 run`
-      `make -f Makefile.aomp ARCH=gfx906 run`
-      
-  Option 2: Python scripts that help build, run and gather results from the benchmarks. As well as a basic script to compare results from two different runs.
+## Option 1: Makefile scripts that build and run an individual benchmark
+    Navigate to a benchmark in CUDA (benchmark-cuda) and type  
+    `make ARCH=sm_70 run`  // run on a NIVIDA GPU device with compute capability 7.0
+    
+    Navigate to a benchmark in HIP (benchmark-hip) and type  
+    `make run`
+    
+    Navigate to a benchmark in SYCL (benchmark-sycl) and type   
+    `make CUDA=yes CUDA_ARCH=sm_70 GCC_TOOLCHAIN="" run` (targeting an NVIDIA GPU)
+    `make HIP=yes HIP_ARCH=gfx908 run`                   (targeting an AMD GPU)  
+    `make run` or `make CC=icpx run`                     (targeting an Intel GPU)
+    NOTE: `--gcc-toolchain` may be required for the SYCL compiler to select the proper GNU toolchain; otherwise unset GCC_TOOLCHAIN
+    
+    Navigate to a benchmark in OpenMP (benchmark-omp) and type  
+    `make -f Makefile.nvc run`  (targeting NVIDIA GPUs)
+    `make -f Makefile.aomp run` (targeting AMD GPUs)
+    `make run`                  (targeting Intel GPUs) 
+    
+    Users may need to set appropriate values (e.g., `sm_80`, `sm_90`, `gfx906`, `gfx1030`) for their target offloading devices  
+    `make -f Makefile.nvc SM=cc80 run`
+    `make -f Makefile.aomp ARCH=gfx906 run`
+
+### Option 1 for Kokkos
+  Kokkos build was implemented with cmake. To build you have to include kokkos paths. It also includes a run command.
+
+  ```bash
+  mkdir build
+  cd build
+  cmake .. -DDEVICE=ngpu -DKOKKOS_INSTALL_DIR=/opt/kokkos4.1/kokkos/cuda_install/ -DKokkos_DIR=/opt/kokkos4.1/kokkos/cuda_install/lib/cmake/Kokkos/
+  make
+  make run
+  ```
+
+## Option 2: Python scripts that help build
+  Python scripts that help build, run and gather results from the benchmarks. As well as a basic script to compare results from two different runs.
 
     It works with a `.json` file containing the benchmark names, a regex to
     find the timings in the benchmark output and optional arguments that
@@ -1440,9 +1452,8 @@ Early results are shown [here](results/README.md)
 ## Developer
 Authored and maintained by Zheming Jin (https://github.com/zjin-lcf) 
 
+## Credits
+* Z. Jin and J. S. Vetter, "A Benchmark Suite for Improving Performance Portability of the SYCL Programming Model," 2023 IEEE International Symposium on Performance Analysis of Systems and Software (ISPASS), Raleigh, NC, USA, 2023, pp. 325-327, doi: 10.1109/ISPASS57527.2023.00041. (https://ieeexplore.ieee.org/document/10158214)
+
 ## Acknowledgement
-Abhishek Bagusetty, Andrey Alekseenko, Anton Gorshkov, Beau Johnston, Bernhard Esslinger, Bert de Jong, Chengjian Liu, Chris Knight, David Oro, Douglas Franz, Edson Borin, Gabriell Araujo, Georgi Mirazchiyski, Henry Gabb, Hugh Delaney, Ian Karlin, Istvan Reguly, Jack Kirk, Jason Lau, Jeff Hammond, Jenny Chen, Jianxin Qiu, Jakub Chlanda, Jiya Su, John Tramm, Ju Zheng, Junchao Zhang, Kali Uday Balleda, Kinman Lei, Martin Burtscher, Matthias Noack, Michael Kruse, Michel Migdal, Mike Franusich, Mike Giles, Mikhail Dvorskiy, Mohammed Alser, Muhammad Haseeb, Muaaz Awan, Nevin Liber, Nicholas Miller, Pavel Samolysov, Pedro Valero Lara, Piotr Różański, Rahulkumar Gayatri, Shaoyi Peng, Steffen Larsen, Rafal Bielski, Robert Harrison, Robin Kobus, Rod Burns, Rodrigo Vimieiro, Romanov Vlad, Tadej Ciglarič, Thomas Applencourt, Tiago Carneiro, Timmie Smith, Tobias Baumann, Usman Roshan, Wayne Joubert, Ye Luo, Yongbin Gu, Zhe Chen
-
-Codeplay<sup>®</sup> and Intel<sup>®</sup> for their contributions to the oneAPI ecosystem   
-
-The project uses resources at the Intel<sup>®</sup> DevCloud, the Chameleon testbed supported by the National Science Foundation, the Argonne Leadership Computing Facility supported by the Office of Science of the U.S. Department of Energy under Contract No. DE-AC02-06CH11357, and the Experimental Computing Laboratory (ExCL) at Oak Ridge National Laboratory supported by the Office of Science of the U.S. Department of Energy under Contract No. DE-AC05-00OR22725.
+This work has been supported by the EU (FEDER), the Spanish MINECO and CM under grants S2018/TCS-4423, PID2021-126576NB-I00 funded by MCIN/AEI/10.13039/501100011033 and by “ERDF A way of making Europe”.

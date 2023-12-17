@@ -47,6 +47,8 @@ int main(int argc, char* argv[])
     erode_time += erode(img_d, tmp_d, width, height, hsize, vsize);
   }
 
+  printf("Total kernel execution time (dilate): %f (s)\n", (dilate_time * 1e-9f));
+  printf("Total kernel execution time (erode): %f (s)\n", (erode_time * 1e-9f));
   printf("Average kernel execution time (dilate): %f (s)\n", (dilate_time * 1e-9f) / repeat);
   printf("Average kernel execution time (erode): %f (s)\n", (erode_time * 1e-9f) / repeat);
 

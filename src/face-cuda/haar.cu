@@ -196,7 +196,7 @@ std::vector<MyRect> detectObjects(
                                  total_nodes);
 
     /* print out for each scale of the image pyramid */
-    printf("detecting faces, iter := %d\n", iter_counter);
+    //printf("detecting faces, iter := %d\n", iter_counter);
 
     /****************************************************
      * Process the current scale with the cascaded fitler.
