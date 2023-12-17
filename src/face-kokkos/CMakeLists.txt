@@ -34,7 +34,9 @@ else() # CPU
 endif()
 
 find_package(Kokkos REQUIRED)
-find_package(oneDPL REQUIRED)
+if(DEVICE STREQUAL "igpu")
+    find_package(oneDPL REQUIRED)
+endif()
 
 if(NOT DEFINED ENV{KOKKOS_INSTALL_DIR})
     set(KOKKOS_INSTALL_DIR "/opt/kokkos/build/" CACHE PATH "Path to which Kokkos has been installed") 
