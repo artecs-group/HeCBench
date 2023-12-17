@@ -13,7 +13,8 @@ class Benchmark:
     def __init__(self, args, name, res_regex, run_args = [], binary = "main", invert = False):
         if name.endswith('sycl'):
             self.MAKE_ARGS = ['GCC_TOOLCHAIN="{}"'.format(args.gcc_toolchain)]
-            self.MAKE_ARGS = self.MAKE_ARGS + args.sycl_fcompile.split(',')
+            if args.sycl_fcompile != '':
+                self.MAKE_ARGS = self.MAKE_ARGS + args.sycl_fcompile.split(',')
             if args.sycl_type == 'cuda':
                 self.MAKE_ARGS.append('CUDA=yes')
                 self.MAKE_ARGS.append('CUDA_ARCH=sm_{}'.format(args.nvidia_sm))
@@ -26,7 +27,8 @@ class Benchmark:
                 self.MAKE_ARGS.append('HIP=no')
                 self.device = 'igpu'
         elif name.endswith('kokkos'):
-            self.MAKE_ARGS = args.kokkos_fcompile.split(',')
+            if args.kokkos_fcompile != '':
+                self.MAKE_ARGS = args.kokkos_fcompile.split(',')
             if args.kokkos_type == 'ngpu':
                 self.MAKE_ARGS.append('-DDEVICE=ngpu')
                 self.device = 'ngpu'
@@ -37,7 +39,8 @@ class Benchmark:
                 self.MAKE_ARGS.append('-DDEVICE=cpu')
         elif name.endswith('cuda'):
             self.MAKE_ARGS = ['CUDA_ARCH=sm_{}'.format(args.nvidia_sm)]
-            self.MAKE_ARGS = self.MAKE_ARGS + args.cuda_fcompile.split(',')
+            if args.cuda_fcompile != '':
+                self.MAKE_ARGS = self.MAKE_ARGS + args.cuda_fcompile.split(',')
             self.device = 'ngpu'
         else:
             self.MAKE_ARGS = []
