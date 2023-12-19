@@ -113,7 +113,7 @@ class Benchmark:
         if self.power != '':
             pcmd = []
             if self.device == 'ngpu':
-                pcmd = ['sudo', 'tegrastats', '--interval', '1000']
+                pcmd = ['sudo', 'tegrastats', '--interval', '100']
             elif self.device == 'igpu':
                 pcmd = ['sudo', 'turbostat', '--Summary', '--quiet', '--show', 'PkgTmp,PkgWatt,GFXMHz,GFXWatt,RAMWatt,CorWatt', '--interval', '1']
             if len(pcmd) > 0:
