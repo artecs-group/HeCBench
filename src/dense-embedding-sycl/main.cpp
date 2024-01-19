@@ -79,6 +79,7 @@ int main(int argc, char* argv[])
   const int batch_size = atoi(argv[2]);
   const int repeat = atoi(argv[3]);
   assert(nrows > batch_size * batch_size);
+  double time_total = 0;
 
   printf("Number of rows in the embedding table: %d\n", nrows);
   printf("Batch size: %d\n", batch_size);
@@ -163,6 +164,7 @@ int main(int argc, char* argv[])
     auto end = std::chrono::steady_clock::now();
     auto time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
     printf("Average execution time of dense embedding kernel (k1): %f (us)\n", (time * 1e-3f) / repeat);
+    time_total += time * 1e-9f;
 
     q.wait();
     start = std::chrono::steady_clock::now();
@@ -180,6 +182,7 @@ int main(int argc, char* argv[])
     end = std::chrono::steady_clock::now();
     time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
     printf("Average execution time of dense embedding kernel (k2): %f (us)\n", (time * 1e-3f) / repeat);
+    time_total += time * 1e-9f;
 
     q.memcpy(output, d_output, input_size_bytes).wait();
 
@@ -203,6 +206,6 @@ int main(int argc, char* argv[])
     free(output_ref);
     free(input_offset);
   }
-
+  printf("Total execution time of dense embedding: %f s\n", time_total);
   return 0;
 }
