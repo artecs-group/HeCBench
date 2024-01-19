@@ -37,8 +37,8 @@ LDFLAGS =
 
 ifeq ($(CUDA), yes)
   CFLAGS += -fsycl-targets=nvptx64-nvidia-cuda \
-            -Xsycl-target-backend --cuda-gpu-arch=$(CUDA_ARCH) \
-            --gcc-toolchain=$(GCC_TOOLCHAIN)
+            -Xsycl-target-backend --cuda-gpu-arch=$(CUDA_ARCH)
+            #--gcc-toolchain=$(GCC_TOOLCHAIN)
 endif
 
 ifeq ($(HIP), yes)
@@ -74,4 +74,4 @@ clean:
 	rm -rf $(program) $(obj)
 
 run: $(program)
-	$(LAUNCHER) ./$(program) 10000000 100000
+	$(LAUNCHER) ./$(program) 10000000 1000

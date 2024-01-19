@@ -179,6 +179,7 @@ int main(int argc, char* argv[])
 
   const int count = atoi(argv[1]);
   const int repeat = atoi(argv[2]);
+  double total_time = 0.0f;
 
   size_t size = count * sizeof(half);
 
@@ -253,6 +254,7 @@ int main(int argc, char* argv[])
   auto time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
   printf("Average execution time of ReluGrad_impl1 Kernel: %f (us)\n",
           (time * 1e-3f) / repeat);
+  total_time += (time * 1e-9f);
 
   q.memcpy(h_backprop, d_backprop, size).wait();
 
@@ -289,6 +291,7 @@ int main(int argc, char* argv[])
   time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
   printf("Average execution time of ReluGrad_impl2 Kernel: %f (us)\n",
           (time * 1e-3f) / repeat);
+  total_time += (time * 1e-9f);
 
   q.memcpy(h_backprop, d_backprop, size).wait();
 
@@ -346,6 +349,7 @@ int main(int argc, char* argv[])
   time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
   printf("Average execution time of Relu_impl1 Kernel: %f (us)\n",
           (time * 1e-3f) / repeat);
+  total_time += (time * 1e-9f);
 
   q.memcpy(h_out, d_out, size).wait();
 
@@ -368,6 +372,8 @@ int main(int argc, char* argv[])
   time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
   printf("Average execution time of Relu_impl2 Kernel: %f (us)\n",
           (time * 1e-3f) / repeat);
+  total_time += (time * 1e-9f);
+  printf("Total execution time: %f (s)\n", total_time);
 
   q.memcpy(h_out, d_out, size).wait();
 
