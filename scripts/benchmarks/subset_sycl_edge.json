@@ -1,13 +1,13 @@
 {
     "attentionMultiHead-cuda": [
-        "(?:Total kernel execution time: )([0-9.+-e]+)(?: \\(sec\\))",
+        "(?:Total kernel execution time: )([0-9.+-e]+)(?: \\(s\\))",
         [
             "100000"
         ],
         "main"
     ],
     "attentionMultiHead-sycl": [
-        "(?:Total kernel execution time: )([0-9.+-e]+)(?: \\(sec\\))",
+        "(?:Total kernel execution time: )([0-9.+-e]+)(?: \\(s\\))",
         [
             "100000"
         ],
@@ -17,7 +17,7 @@
         "(?:Total execution time: )([0-9.+-e]+)(?: \\(s\\))",
         [
             "10000000",
-            "1000"
+            "800"
         ],
         "main"
     ],
@@ -25,7 +25,7 @@
         "(?:Total execution time: )([0-9.+-e]+)(?: \\(s\\))",
         [
             "10000000",
-            "1000"
+            "800"
         ],
         "main"
     ],
@@ -33,7 +33,7 @@
         "(?:Total kernel time: )([0-9.+-e]+)(?: s)",
         [
             "5",
-            "5000"
+            "3000"
         ],
         "main"
     ],
@@ -41,15 +41,15 @@
         "(?:Total kernel time: )([0-9.+-e]+)(?: s)",
         [
             "5",
-            "5000"
+            "3000"
         ],
         "main"
     ],
     "dense-embedding-cuda": [
         "(?:Total execution time of dense embedding: )([0-9.+-e]+)(?: s)",
         [
-            "100000",
-            "256",
+            "10000",
+            "64",
             "100"
         ],
         "main"
@@ -57,8 +57,8 @@
     "dense-embedding-sycl": [
         "(?:Total execution time of dense embedding: )([0-9.+-e]+)(?: s)",
         [
-            "100000",
-            "256",
+            "10000",
+            "64",
             "100"
         ],
         "main"
