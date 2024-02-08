@@ -1,0 +1,66 @@
+{
+    "attentionMultiHead-cuda": [
+        "(?:Total kernel execution time: )([0-9.+-e]+)(?: \\(s\\))",
+        [
+            "100000"
+        ],
+        "main"
+    ],
+    "attentionMultiHead-sycl": [
+        "(?:Total kernel execution time: )([0-9.+-e]+)(?: \\(s\\))",
+        [
+            "100000"
+        ],
+        "main"
+    ],
+    "relu-cuda": [
+        "(?:Total execution time: )([0-9.+-e]+)(?: \\(s\\))",
+        [
+            "10000000",
+            "800"
+        ],
+        "main"
+    ],
+    "relu-sycl": [
+        "(?:Total execution time: )([0-9.+-e]+)(?: \\(s\\))",
+        [
+            "10000000",
+            "800"
+        ],
+        "main"
+    ],
+    "resnet-kernels-cuda": [
+        "(?:Total kernel time: )([0-9.+-e]+)(?: s)",
+        [
+            "5",
+            "300"
+        ],
+        "main"
+    ],
+    "resnet-kernels-sycl": [
+        "(?:Total kernel time: )([0-9.+-e]+)(?: s)",
+        [
+            "5",
+            "300"
+        ],
+        "main"
+    ],
+    "dense-embedding-cuda": [
+        "(?:Total execution time of dense embedding: )([0-9.+-e]+)(?: s)",
+        [
+            "10000",
+            "64",
+            "1000"
+        ],
+        "main"
+    ],
+    "dense-embedding-sycl": [
+        "(?:Total execution time of dense embedding: )([0-9.+-e]+)(?: s)",
+        [
+            "10000",
+            "64",
+            "1000"
+        ],
+        "main"
+    ]
+}

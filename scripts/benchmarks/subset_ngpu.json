@@ -2,21 +2,21 @@
     "aobench-cuda": [
         "(?:Total render time \\()(?:[0-9]+)(?: iterations\\): )([0-9.+-e]+)(?: sec\\.)",
         [
-            "8000"
+            "12000"
         ],
         "ao"
     ],
     "aobench-sycl": [
         "(?:Total render time \\()(?:[0-9]+)(?: iterations\\): )([0-9.+-e]+)(?: sec\\.)",
         [
-            "8000"
+            "12000"
         ],
         "main"
     ],
     "aobench-kokkos": [
         "(?:Total render time \\()(?:[0-9]+)(?: iterations\\): )([0-9.+-e]+)(?: sec\\.)",
         [
-            "8000"
+            "12000"
         ],
         "aobench"
     ],
@@ -55,7 +55,7 @@
         [
           "8192",
           "8192",
-          "100"
+          "150"
         ],
         "main"
       ],
@@ -64,7 +64,7 @@
             [
             "8192",
             "8192",
-            "100"
+            "150"
             ],
             "main"
         ],
@@ -73,7 +73,7 @@
             [
             "8192",
             "8192",
-            "100"
+            "150"
             ],
             "convolutionSeparable"
         ],
@@ -169,7 +169,7 @@
             [
             "data/dirty_4096.img",
             "data/psf_4096.img",
-            "1000"
+            "2000"
             ],
             "main"
         ],
@@ -178,7 +178,7 @@
             [
             "../hogbom-cuda/data/dirty_4096.img",
             "../hogbom-cuda/data/psf_4096.img",
-            "1000"
+            "2000"
             ],
             "main"
         ],
@@ -187,7 +187,7 @@
             [
             "../../hogbom-cuda/data/dirty_4096.img",
             "../../hogbom-cuda/data/psf_4096.img",
-            "1000"
+            "2000"
             ],
             "hogbom"
         ],
@@ -228,7 +228,7 @@
             "(?:Total kernel execution time: )([0-9.+-e]+)(?: \\(s\\))",
             [
             "input.hdr",
-            "5000"
+            "7000"
             ],
             "main"
         ],
@@ -236,7 +236,7 @@
             "(?:Total kernel execution time: )([0-9.+-e]+)(?: \\(s\\))",
             [
             "../tonemapping-cuda/input.hdr",
-            "5000"
+            "7000"
             ],
             "main"
         ],
@@ -244,7 +244,7 @@
             "(?:Total kernel execution time: )([0-9.+-e]+)(?: \\(s\\))",
             [
             "../../tonemapping-cuda/input.hdr",
-            "5000"
+            "7000"
             ],
             "tonemapping"
         ],
@@ -329,7 +329,7 @@
         "crc64-cuda": [
             "(?:Kernels execution time: )([0-9.+-e]+)(?: s)",
             [
-            "200",
+            "300",
             "5",
             "33554432"
             ],
@@ -338,7 +338,7 @@
         "crc64-sycl": [
             "(?:Kernels execution time: )([0-9.+-e]+)(?: s)",
             [
-            "200",
+            "300",
             "5",
             "33554432"
             ],
@@ -347,7 +347,7 @@
         "crc64-kokkos": [
             "(?:Kernels execution time: )([0-9.+-e]+)(?: s)",
             [
-            "200",
+            "300",
             "5",
             "33554432"
             ],

@@ -167,7 +167,7 @@ When double-precision floating-point operations are not supported on certain Int
 I appreciate your feedback when any examples don't look right.
 
 # Experimental Results
-Early results are shown [here](results/README.md)
+[Here](results) are some plotted results
 
 # Reference
 ### accuracy (cuda)
@@ -1450,10 +1450,7 @@ Early results are shown [here](results/README.md)
   Zoom in and zoom out an image (https://github.com/rapidsai/cucim)
 
 ## Developer
-Authored and maintained by Zheming Jin (https://github.com/zjin-lcf) 
-
-## Credits
-* Z. Jin and J. S. Vetter, "A Benchmark Suite for Improving Performance Portability of the SYCL Programming Model," 2023 IEEE International Symposium on Performance Analysis of Systems and Software (ISPASS), Raleigh, NC, USA, 2023, pp. 325-327, doi: 10.1109/ISPASS57527.2023.00041. (https://ieeexplore.ieee.org/document/10158214)
+Authored by [Youssef Faqir-Rhazoui](https://github.com/FRYoussef). This work is an extension from [Zheming Jin](https://github.com/zjin-lcf) original work.
 
 ## Acknowledgement
 This work has been supported by the EU (FEDER), the Spanish MINECO and CM under grants S2018/TCS-4423, PID2021-126576NB-I00 funded by MCIN/AEI/10.13039/501100011033 and by “ERDF A way of making Europe”.

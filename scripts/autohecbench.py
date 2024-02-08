@@ -113,7 +113,7 @@ class Benchmark:
         if self.power != '':
             pcmd = []
             if self.device == 'ngpu':
-                pcmd = ['sudo', 'tegrastats', '--interval', '1000']
+                pcmd = ['sudo', 'tegrastats', '--interval', '100']
             elif self.device == 'igpu':
                 pcmd = ['sudo', 'turbostat', '--Summary', '--quiet', '--show', 'PkgTmp,PkgWatt,GFXMHz,GFXWatt,RAMWatt,CorWatt', '--interval', '1']
             if len(pcmd) > 0:
@@ -262,7 +262,7 @@ def main():
         median_time:float = sorted(results[b.name])[len(results[b.name])//2]
         stdev_time:float = statistics.stdev(results[b.name]) if len(results[b.name]) > 1 else 0.0
         str_results = [str(i) for i in results[b.name]]
-        out:str = f"{b.name},{args.repeat},{avg_time},{median_time},{stdev_time},[{','.join(str_results)}]"
+        out:str = f"{b.name},{args.repeat},{avg_time},{median_time},{stdev_time},\"[{','.join(str_results)}]\""
         print(out, file=outfile)
 
     if args.output:

@@ -255,8 +255,9 @@ int main(int argc, char* argv[])
 
   cudaDeviceSynchronize();
   auto end = std::chrono::steady_clock::now();
-  auto time = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
-  printf("Average kernel execution time: %f (us)\n", (time * 1e-3f) / repeat);
+  auto time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+  //printf("Average kernel execution time: %f (s)\n", (time) / repeat);
+  printf("Total kernel execution time: %f (s)\n", (time*1e-3));
 
   cudaMemcpy(h_dst, dst, q_size_bytes, cudaMemcpyDeviceToHost);
 
@@ -265,6 +266,7 @@ int main(int argc, char* argv[])
   cudaFree(dv);
   cudaFree(dst);
 
+#ifdef VERIFY
   // compute distances as simple checksums
   for (int i = 0; i < beamsize - 1; i++) {
     float sum = 0.f;
@@ -275,6 +277,7 @@ int main(int argc, char* argv[])
     }
     printf("Distance between beams %d and %d: %f\n", i, i+1, sqrtf(sum));
   }
+#endif
 
   free(hq);
   free(hk);

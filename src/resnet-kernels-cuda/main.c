@@ -43,6 +43,7 @@ int main(int argc, char** argv) {
   }
   printf("Case %d: Average device offload time: [%lf us]\n", mode, time_total * 1e-3 / (repeat - 2));
   printf("        Average kernel time: [%lf us]\n", ktime_total * 1e-3 / (repeat - 2));
+  printf("        Total kernel time: %lf s\n", ktime_total * 1e-9);
   
   return 0;
 }
